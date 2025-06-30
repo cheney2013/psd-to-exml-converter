@@ -1,0 +1,6 @@
+{
+  "name": "PSD to Egret EXML Converter",
+  "description": "An application to parse PSD files, extract images, and generate corresponding Egret EXML layout files. It also uses Gemini API to suggest alt text for images.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
