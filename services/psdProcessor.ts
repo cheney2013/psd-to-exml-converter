@@ -1133,9 +1133,33 @@ function processLayerListToExtractedElements(
             }
             let primaryFontSize = calculatePixelValue(basePointFontSizeForPrimary, psd.imageResources, textData.transform);
             if (primaryFontSize < 1) primaryFontSize = 1;
+            const primaryFontFamily = textData.style?.font?.name || 'Arial';
 
-            const textWidthAdjustment = primaryFontSize;
-            finalWidth = layerActualWidth + textWidthAdjustment;
+            if (textData.text.includes('\n')) {
+
+                let measuredWidth = 0;
+                if (textData.text) {
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    if (context) {
+                        context.font = `${primaryFontSize}px '${primaryFontFamily}', 'Arial'`;
+                        const lines = textData.text.split('\n');
+                        for (const line of lines) {
+                            const lineWidth = Math.ceil(context.measureText(line).width);
+                            if (lineWidth > measuredWidth) {
+                                measuredWidth = lineWidth;
+                            }
+                        }
+                    } else {
+                        console.warn(`Could not get 2D context to measure text width for layer "${layerOriginalName}". Falling back to PSD width.`);
+                        measuredWidth = layerActualWidth;
+                    }
+                }
+                finalWidth = measuredWidth;
+            } else {
+                finalWidth = 0;
+            }
+            finalHeight = 0;
 
 
             if (textData.transform) {
@@ -1145,7 +1169,7 @@ function processLayerListToExtractedElements(
                 if (Math.abs(angleDeg) > 0.01) {
                     calculatedRotationDegrees = -angleDeg;
                     
-                    anchorOffsetX = finalWidth / 2; 
+                    anchorOffsetX = finalWidth / 2;
                     anchorOffsetY = finalHeight / 2;
 
                     finalX = layerLeftPx + anchorOffsetX;
@@ -1164,8 +1188,12 @@ function processLayerListToExtractedElements(
             finalHeight = Math.max(0, finalHeight); 
 
             if (finalWidth < 0.1 || finalHeight < 0.1) {
-                 console.warn(`Text layer "${layerOriginalName}" has zero or near-zero dimensions after adjustments. Skipping. W:${finalWidth}, H:${finalHeight}`);
-                 continue;
+                 if (!textData.text.includes('\n') && finalWidth === 0) {
+                    // This is OK for single-line text, width is auto.
+                 } else {
+                    console.warn(`Text layer "${layerOriginalName}" has zero or near-zero dimensions after adjustments. Skipping. W:${finalWidth}, H:${finalHeight}`);
+                    continue;
+                 }
             }
 
 
@@ -1187,7 +1215,6 @@ function processLayerListToExtractedElements(
                     primaryTextColor = agPsdColorToHex(solidFillEffect.color);
                 }
             }
-            const primaryFontFamily = textData.style?.font?.name || 'Arial';
 
             let primaryStrokeSize: number | undefined, primaryStrokeColor: string | undefined;
             let primaryStrokeSource: ExtractedTextElement['primaryStrokeSource'] = 'none';
@@ -1226,10 +1253,6 @@ function processLayerListToExtractedElements(
             }
 
             const extractedIsRichText = !!(textData.styleRuns && textData.styleRuns.length > 0);
-
-            if (primaryTextAlign === 'center') {
-                finalX -= textWidthAdjustment/2; // Adjust left position for center alignment
-            }
 
             const currentTextElement: ExtractedTextElement = {
                 id: currentElementId, type: 'text', originalName: layerOriginalName, name: defaultElementName, // Use defaultElementName for text 'name'

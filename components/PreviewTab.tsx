@@ -99,13 +99,13 @@ const ExmlPreviewComponent: React.FC<ExmlPreviewComponentProps> = ({ parsedData,
         if (typeof textEl.rotation === 'number' && Math.abs(textEl.rotation) > 0.01 && typeof textEl.anchorOffsetX === 'number' && typeof textEl.anchorOffsetY === 'number') {
             outerPositioningStyle.left = (textEl.x - textEl.anchorOffsetX) * scale;
             outerPositioningStyle.top = ((textEl.y - textEl.anchorOffsetY) + textVerticalOffsetForPreview) * scale;
-            outerPositioningStyle.width = textEl.width * scale; 
+            // outerPositioningStyle.width = textEl.width * scale; 
             outerPositioningStyle.transform = `rotate(${textEl.rotation.toFixed(2)}deg)`;
             outerPositioningStyle.transformOrigin = `${textEl.anchorOffsetX * scale}px ${textEl.anchorOffsetY * scale}px`;
         } else {
             outerPositioningStyle.left = textEl.x * scale; 
             outerPositioningStyle.top = (textEl.y + textVerticalOffsetForPreview) * scale;
-            outerPositioningStyle.width = textEl.width * scale;
+            // outerPositioningStyle.width = textEl.width * scale;
         }
         outerPositioningStyle.textAlign = textEl.textAlign || 'left';
 
@@ -119,6 +119,7 @@ const ExmlPreviewComponent: React.FC<ExmlPreviewComponentProps> = ({ parsedData,
             color: textEl.textColor,
             fontSize: `${primaryScaledFontSizeForDiv}px`,
             verticalAlign: 'top', // Added to stick to the top of the parent
+            textWrapMode: 'nowrap'
         };
 
         if (textEl.text.includes('\n')) {
@@ -185,7 +186,7 @@ const ExmlPreviewComponent: React.FC<ExmlPreviewComponentProps> = ({ parsedData,
   };
 
   return (
-    <div ref={containerRef} className="bg-slate-900 p-1 sm:p-2 rounded-lg shadow-inner w-full h-full flex items-center justify-center overflow-hidden" role="region" aria-label="EXML Preview Canvas">
+    <div ref={containerRef} className="bg-slate-900 p-1 sm:p-2 rounded-lg shadow-inner w-full h-full flex justify-center overflow-hidden" role="region" aria-label="EXML Preview Canvas">
       <div className="relative border border-slate-600" style={{ width: scaledContentWidth, height: scaledContentHeight, backgroundImage: 'repeating-conic-gradient(#D8D8D8 0% 25%, #FFFFFF 25% 50%)', backgroundPosition: '0 0', backgroundSize: '16px 16px' }} onClick={() => onElementClick('')} role="group" aria-label="Preview content area">
         {parsedData.elements.map(element => renderElement(element))}
       </div>
