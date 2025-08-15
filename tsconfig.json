@@ -7,22 +7,24 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
 
+    /* interop and JSX runtime */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
     /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "moduleResolution": "node",
     "isolatedModules": true,
-    "moduleDetection": "force",
     "noEmit": true,
     "allowJs": true,
-    "jsx": "react-jsx",
+    "jsx": "react",
+    "types": ["vite/client"],
 
     /* Linting */
-    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
 
+    "baseUrl": ".",
     "paths": {
       "@/*" :  ["./*"]
     }

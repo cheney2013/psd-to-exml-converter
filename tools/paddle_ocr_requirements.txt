@@ -1,0 +1,13 @@
+# Minimal requirements for the PaddleOCR server
+flask
+pillow
+paddleocr
+flask-cors
+
+# PaddleOCR depends on paddlepaddle. On many platforms you should install the appropriate paddlepaddle wheel first.
+# Example for CPU (Windows/Linux/macOS):
+# pip install paddlepaddle -f https://www.paddlepaddle.org.cn/whl/mkl/avx/stable.html
+# then:
+# pip install paddleocr
+
+# If you need a more complete deployment guide, ask and I'll add one.

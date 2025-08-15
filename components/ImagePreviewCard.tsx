@@ -5,9 +5,11 @@ import { DownloadIcon, ImageIcon as GenericImageIcon, TextIcon, InfoIcon, Square
 interface ElementPreviewCardProps {
   element: ExtractedLayer;
   onDownloadImage?: (image: ExtractedImageElement) => void;
+  // Optional OCR state for image elements: 'pending' shows a small badge; done/error currently not shown.
+  ocrState?: 'pending' | 'done' | 'error';
 }
 
-const ElementPreviewCard: React.FC<ElementPreviewCardProps> = ({ element, onDownloadImage }) => {
+const ElementPreviewCard: React.FC<ElementPreviewCardProps> = ({ element, onDownloadImage, ocrState }) => {
 
   const isImageElement = (el: ExtractedLayer): el is ExtractedImageElement => el.type === 'image';
   const isTextElement = (el: ExtractedLayer): el is ExtractedTextElement => el.type === 'text';
@@ -35,12 +37,17 @@ const ElementPreviewCard: React.FC<ElementPreviewCardProps> = ({ element, onDown
     <div className="bg-slate-700 rounded-lg shadow-lg overflow-hidden transform transition-all hover:shadow-xl hover:scale-105">
       {/* Image Preview Area */}
       {isImageElement(element) && element.dataUrl && (
-        <div className="w-full h-40 bg-slate-600 flex items-center justify-center overflow-hidden">
+        <div className="relative w-full h-40 bg-slate-600 flex items-center justify-center overflow-hidden">
           <img
             src={element.dataUrl}
             alt={element.originalName}
             className="max-w-full max-h-full object-contain"
           />
+          {ocrState === 'pending' && (
+            <div className="absolute top-2 right-2 bg-amber-500 text-black text-[10px] px-2 py-0.5 rounded shadow">
+              识别中…
+            </div>
+          )}
         </div>
       )}
       {isTextElement(element) && (

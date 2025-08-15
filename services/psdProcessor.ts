@@ -23,6 +23,8 @@ import {
   ExtractedBaseItemBoxElement
 } from '../types';
 
+// OCR is invoked asynchronously in App; no direct import here.
+
 // Use the renamed AgPsdLayerInternalimport for type hints from the library directly
 type AgPsdLayerAgPsd = AgPsdLayerInternalimport; // Renamed to avoid confusion with our PsdLayer
 
@@ -983,6 +985,8 @@ function processLayerListToExtractedElements(
 
                     const vectorOriginDescriptor = layer.vectorOrigination.keyDescriptorList[0] as any;
                     const vectorBounding = vectorOriginDescriptor.keyOriginShapeBoundingBox;
+
+                    if (!vectorBounding) continue;
                     
                     let cornerRadius: number | undefined = undefined;
                     const radii = vectorOriginDescriptor.keyOriginRRectRadii;
@@ -1373,6 +1377,13 @@ function processLayerListToExtractedElements(
                 const trimmedPrefix = imageResourcePrefix.trim();
                 if (trimmedPrefix !== "") baseNameForDeduplication = `${trimmedPrefix}_${baseNameForDeduplication}`;
 
+                // If this visual candidate is actually a rasterized text layer (outputTypeResult indicated image),
+                // prefix the resource name so the actual resource ID reflects that.
+                const isTextRasterizedResource = !!(layer.text && outputTypeResult.type === 'image' && outputTypeResult.reason);
+                if (isTextRasterizedResource) {
+                    baseNameForDeduplication = `text_img_${baseNameForDeduplication}`;
+                }
+
                 if (uniqueImageDataUrls.has(dataUrl)) {
                     imageResourceName = uniqueImageDataUrls.get(dataUrl)!;
                 } else {
@@ -1429,10 +1440,12 @@ export const generateElementsFromStructure = async (
       richTextNotifications
   );
 
-  const imageAssets = new Map<string, string>();
-  uniqueImageDataUrls.forEach((resourceName, dataUrl) => {
-    imageAssets.set(resourceName, dataUrl);
-  });
+    // OCR-based renaming moved to App (background task) so initial render is not blocked.
+
+    const imageAssets = new Map<string, string>();
+    uniqueImageDataUrls.forEach((resourceName, dataUrl) => {
+        imageAssets.set(resourceName, dataUrl);
+    });
 
   return {
     width: psd.width,

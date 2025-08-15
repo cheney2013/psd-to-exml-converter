@@ -1,5 +1,6 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import * as React from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ParsedPsdData, ExtractedLayer, ExtractedImageElement, RichTextNotification, ExtractedTextElement, PsdStructuralData, PsdLayer, PsdParsingError, ExtractedXGroupButtonElement, ExtractedGroupElement, ExtractedSimpleButtonElement, ExtractedBaseItemBoxElement, PsdOverallTextStyle, StyleRunStyle, AgPsdObject } from './types';
 import { agPsdColorToHex, extractPsdStructure, generateElementsFromStructure } from './services/psdProcessor';
 import { generateExml, generateExmlForElement } from './services/exmlGenerator';
@@ -11,7 +12,8 @@ import { CodeViewTab } from './components/CodeViewTab';
 import { PreviewTab } from './components/PreviewTab';
 import { RichTextInfoTab } from './components/RichTextInfoTab';
 import { DiagnosticsTab } from './components/DiagnosticsTab';
-import { LoadingSpinner, InfoIcon } from './components/icons';
+import { LoadingSpinner } from './components/icons';
+import { ocrContainsText } from './services/textDetector';
 
 
 // This type is used by ImageGalleryTab and TabNavigation
@@ -62,6 +64,10 @@ export const App: React.FC = () => {
   const [selectedElementIdForExmlHighlight, setSelectedElementIdForExmlHighlight] = useState<string | null>(null);
   const [selectedElementIdForPreviewHighlight, setSelectedElementIdForPreviewHighlight] = useState<string | null>(null);
 
+  // OCR background job tracking (keyed by dataUrl to remain stable across renames)
+  const [ocrStatusByDataUrl, setOcrStatusByDataUrl] = useState<Record<string, 'pending'|'done'|'error'>>({});
+  const ocrStartedRef = useRef<Set<string>>(new Set());
+
   const getEffectiveSkinClassName = useCallback((inputName: string): string => {
     let name = inputName.trim();
     if (name && !name.toLowerCase().endsWith('skin')) {
@@ -106,6 +112,9 @@ export const App: React.FC = () => {
       setPsdStructureCache(null);
       setSelectedElementIdForExmlHighlight(null);
       setSelectedElementIdForPreviewHighlight(null);
+  // Reset OCR state for a new PSD
+  setOcrStatusByDataUrl({});
+  ocrStartedRef.current = new Set();
       exmlLineRefs.current = {};
 
       try {
@@ -167,6 +176,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (psdStructureCache && parsedData && debouncedImagePrefix !== parsedData.generatingPrefix) {
       processAndSetData(psdStructureCache, debouncedImagePrefix);
+      // Reset OCR state when regenerating with a new prefix
+      setOcrStatusByDataUrl({});
+      ocrStartedRef.current = new Set();
     }
   }, [debouncedImagePrefix, psdStructureCache, parsedData, processAndSetData]);
 
@@ -332,11 +344,20 @@ export const App: React.FC = () => {
     link.href = dataUrl;
     // Remove _png suffix from base name, then add .png extension
     const baseName = imageName.replace(/_png$/, '');
-    link.download = `${baseName}.png`; 
+    // If this resource corresponds to an image that was created by rasterizing a text layer,
+    // prepend the "text_img_" prefix to the downloaded filename.
+    let downloadName = `${baseName}.png`;
+    if (parsedData) {
+      const isTextRasterized = parsedData.elements.some(el => el.type === 'image' && (el as ExtractedImageElement).name === imageName && !!(el as ExtractedImageElement).rasterizationReason);
+      if (isTextRasterized) {
+        downloadName = `text_img_${baseName}.png`;
+      }
+    }
+    link.download = downloadName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }, []);
+  }, [parsedData]);
   
   const calculatePixelFontSize = (
     baseFontSizeInput: number | undefined,
@@ -410,8 +431,6 @@ export const App: React.FC = () => {
     // textElement.textColor and textElement.strokeColor are now #RRGGBB
     // Egret textFlow expects 0xRRGGBB for color attributes
     const primaryEffectStrokeSize = textElement?.strokeSize;
-    const primaryEffectStrokeColorEgret = textElement?.strokeColor?.replace('#', '0x');
-
 
     let htmlSegments: string[] = [];
     let currentTextOffset = 0;
@@ -640,7 +659,14 @@ export const App: React.FC = () => {
       parsedData.imageAssets.forEach((dataUrl, resourceName) => {
         // Remove _png suffix from base name, then add .png extension
         const baseName = resourceName.replace(/_png$/, '');
-        const fileNameInZip = `${baseName}.png`;
+        // If this resource corresponds to a rasterized text layer, add prefix
+        let fileNameInZip = `${baseName}.png`;
+        if (parsedData) {
+          const isTextRasterized = parsedData.elements.some(el => el.type === 'image' && (el as ExtractedImageElement).name === resourceName && !!(el as ExtractedImageElement).rasterizationReason);
+          if (isTextRasterized) {
+            fileNameInZip = `text_img_${baseName}.png`;
+          }
+        }
         const base64Data = dataUrl.split(',')[1];
         zip.file(fileNameInZip, base64Data, { base64: true });
       });
@@ -664,6 +690,83 @@ export const App: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Kick off background OCR per unique image asset; update only IDs (resource names) when recognized.
+  useEffect(() => {
+    if (!parsedData) return;
+    const entries = Array.from(parsedData.imageAssets.entries()); // [resourceName, dataUrl]
+    if (entries.length === 0) return;
+
+    // A helper to ensure unique new names
+    const ensureUniqueName = (base: string, existing: Set<string>) => {
+      let attempt = `${base}_png`;
+      let idx = 0;
+      while (existing.has(attempt)) {
+        idx += 1;
+        attempt = `${base}_${idx}_png`;
+      }
+      return attempt;
+    };
+
+    // Build a set of current names for uniqueness checks
+    const currentNames = new Set<string>();
+    parsedData.imageAssets.forEach((_v, k) => currentNames.add(k));
+
+    entries.forEach(([resourceName, dataUrl]) => {
+      if (ocrStartedRef.current.has(dataUrl)) return; // already started
+      ocrStartedRef.current.add(dataUrl);
+      setOcrStatusByDataUrl(prev => ({ ...prev, [dataUrl]: 'pending' }));
+
+      // Fire and forget per image
+      (async () => {
+        try {
+          const res = await ocrContainsText(dataUrl, 1);
+          const recognized = (res && typeof res.text === 'string') ? res.text : '';
+          if (recognized.replace(/\s+/g, '').length >= 1) {
+            // Compute new name by prefixing text_img_
+            const baseNoPng = resourceName.replace(/_png$/, '');
+            const baseWithPrefix = baseNoPng.startsWith('text_img_') ? baseNoPng : `text_img_${baseNoPng}`;
+            const newName = ensureUniqueName(baseWithPrefix, currentNames);
+            currentNames.add(newName);
+
+            // Apply rename to parsedData immutably
+            setParsedData(prev => {
+              if (!prev) return prev;
+              // Update elements
+              const patchElements = (els: ExtractedLayer[]): ExtractedLayer[] =>
+                els.map(el => {
+                  if (el.type === 'image') {
+                    const img = el as ExtractedImageElement;
+                    if (img.name === resourceName) {
+                      return { ...img, name: newName };
+                    }
+                    return img;
+                  } else if ((el as any).children && Array.isArray((el as any).children)) {
+                    const group = el as ExtractedGroupElement | ExtractedXGroupButtonElement;
+                    return { ...group, children: patchElements(group.children) } as ExtractedLayer;
+                  }
+                  return el;
+                });
+
+              const newElements = patchElements(prev.elements);
+              // Update imageAssets map key
+              const newAssets = new Map(prev.imageAssets);
+              const data = newAssets.get(resourceName);
+              if (data) {
+                newAssets.delete(resourceName);
+                newAssets.set(newName, data);
+              }
+
+              return { ...prev, elements: newElements, imageAssets: newAssets };
+            });
+          }
+          setOcrStatusByDataUrl(prev => ({ ...prev, [dataUrl]: 'done' }));
+        } catch (e) {
+          setOcrStatusByDataUrl(prev => ({ ...prev, [dataUrl]: 'error' }));
+        }
+      })();
+    });
+  }, [parsedData]);
 
 
   return (
@@ -714,6 +817,18 @@ export const App: React.FC = () => {
                 isLoading={isLoading}
                 handleReprocessPsd={handleReprocessPsd}
                 psdFile={psdFile}
+                ocrProgress={(() => {
+                  if (!parsedData) return undefined;
+                  const total = parsedData.imageAssets.size;
+                  if (total === 0) return { pending: 0, total: 0 };
+                  let done = 0;
+                  parsedData.imageAssets.forEach((dataUrl) => {
+                    const st = ocrStatusByDataUrl[dataUrl];
+                    if (st === 'done' || st === 'error') done += 1;
+                  });
+                  const pending = Math.max(0, total - done);
+                  return { pending, total };
+                })()}
               />
               <div className="flex-grow min-h-0 relative" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
                 {activeTab === 'images' && parsedData && (
@@ -721,6 +836,7 @@ export const App: React.FC = () => {
                     imageElementsToDisplay={imageElementsToDisplay}
                     isLoading={isLoading}
                     handleDownloadImage={(imageName, dataUrl) => handleDownloadImage(imageName, dataUrl)}
+                    ocrStatusByDataUrl={ocrStatusByDataUrl}
                   />
                 )}
                 {activeTab === 'code' && (
@@ -773,10 +889,7 @@ export const App: React.FC = () => {
       </main>
 
       <footer className="max-w-7xl mx-auto w-full mt-12 text-center text-sm text-slate-500">
-        <p>&copy; {new Date().getFullYear()} PSD to EXML Converter. All rights reserved.</p>
-        <p className="mt-1">
-          Powered by React, Tailwind CSS, and <a href="https://github.com/webtoon/ag-psd" target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:text-sky-400">ag-psd</a>.
-        </p>
+        <p>&copy; {new Date().getFullYear()} PSD to EXML Converter. A work by Chen Yi.</p>
       </footer>
     </div>
   );

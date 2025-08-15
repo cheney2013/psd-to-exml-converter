@@ -8,7 +8,7 @@ interface TabButtonProps {
   icon: React.ReactNode;
   isActive: boolean;
   onClick: () => void;
-  count?: number;
+  count?: React.ReactNode;
   title?: string;
 }
 
@@ -64,6 +64,7 @@ interface TabNavigationProps {
   isLoading: boolean;
   handleReprocessPsd: () => void;
   psdFile: File | null;
+  ocrProgress?: { pending: number; total: number };
 }
 
 export const TabNavigation: React.FC<TabNavigationProps> = ({
@@ -75,8 +76,16 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
   handleDownloadAllImages,
   isLoading,
   handleReprocessPsd,
-  psdFile
+  psdFile,
+  ocrProgress
 }) => {
+  const imagesCountDisplay: React.ReactNode = (() => {
+    if (!ocrProgress || !ocrProgress.total) return imageElementsToDisplay.length;
+    const done = Math.max(0, ocrProgress.total - ocrProgress.pending);
+    // When progress is full, show a single number (total) instead of done/total
+    if (ocrProgress.pending === 0) return ocrProgress.total;
+    return `${done}/${ocrProgress.total}`;
+  })();
   return (
     <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div className="flex flex-wrap space-x-1 sm:space-x-2 bg-slate-700 p-1 rounded-lg shadow mb-4 sm:mb-0" role="tablist" aria-label="Application sections">
@@ -85,7 +94,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
           icon={<ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
           isActive={activeTab === 'images'}
           onClick={() => setActiveTab('images')}
-          count={imageElementsToDisplay.length}
+          count={imagesCountDisplay}
         />
         <TabButton
           label="Code"

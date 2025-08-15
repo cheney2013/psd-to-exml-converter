@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      // No tesseract.js dependency anymore
       server: {
         port: 4000
       }

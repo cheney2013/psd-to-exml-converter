@@ -20,6 +20,8 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@types/react": "^19.1.8",
+    "pngjs": "^7.0.0",
+    "puppeteer": "^24.26.1",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
   }
