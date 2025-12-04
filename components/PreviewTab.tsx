@@ -119,7 +119,7 @@ const ExmlPreviewComponent: React.FC<ExmlPreviewComponentProps> = ({ parsedData,
             color: textEl.textColor,
             fontSize: `${primaryScaledFontSizeForDiv}px`,
             verticalAlign: 'top', // Added to stick to the top of the parent
-            textWrapMode: 'nowrap'
+            /* textWrapMode removed (not a valid React CSS property) */
         };
 
         if (textEl.text.includes('\n')) {

@@ -64,7 +64,7 @@ interface TabNavigationProps {
   isLoading: boolean;
   handleReprocessPsd: () => void;
   psdFile: File | null;
-  ocrProgress?: { pending: number; total: number };
+  // frontend no longer provides OCR progress
 }
 
 export const TabNavigation: React.FC<TabNavigationProps> = ({
@@ -76,16 +76,9 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
   handleDownloadAllImages,
   isLoading,
   handleReprocessPsd,
-  psdFile,
-  ocrProgress
+  psdFile
 }) => {
-  const imagesCountDisplay: React.ReactNode = (() => {
-    if (!ocrProgress || !ocrProgress.total) return imageElementsToDisplay.length;
-    const done = Math.max(0, ocrProgress.total - ocrProgress.pending);
-    // When progress is full, show a single number (total) instead of done/total
-    if (ocrProgress.pending === 0) return ocrProgress.total;
-    return `${done}/${ocrProgress.total}`;
-  })();
+  const imagesCountDisplay: React.ReactNode = imageElementsToDisplay.length;
   return (
     <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div className="flex flex-wrap space-x-1 sm:space-x-2 bg-slate-700 p-1 rounded-lg shadow mb-4 sm:mb-0" role="tablist" aria-label="Application sections">

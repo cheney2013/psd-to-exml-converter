@@ -1,6 +1,6 @@
 
 
-import { ParsedPsdData, ExtractedLayer, ExtractedTextElement, ExtractedImageElement, ExtractedXGroupButtonElement, ExtractedSimpleButtonElement, ExtractedRewardBarElement, ExtractedBaseItemBoxElement, ExtractedGroupElement, ExtractedRectElement } from '../types';
+import { ParsedPsdData, ExtractedLayer, ExtractedTextElement, ExtractedImageElement, ExtractedXGroupButtonElement, ExtractedSimpleButtonElement, ExtractedRewardBarElement, ExtractedBaseItemBoxElement, ExtractedGroupElement } from '../types';
 
 export type ParentClassType = 'BasePage' | 'XNormalPanel' | 'XFullScreenPanel';
 

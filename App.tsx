@@ -13,7 +13,6 @@ import { PreviewTab } from './components/PreviewTab';
 import { RichTextInfoTab } from './components/RichTextInfoTab';
 import { DiagnosticsTab } from './components/DiagnosticsTab';
 import { LoadingSpinner } from './components/icons';
-import { ocrContainsText } from './services/textDetector';
 
 
 // This type is used by ImageGalleryTab and TabNavigation
@@ -64,9 +63,7 @@ export const App: React.FC = () => {
   const [selectedElementIdForExmlHighlight, setSelectedElementIdForExmlHighlight] = useState<string | null>(null);
   const [selectedElementIdForPreviewHighlight, setSelectedElementIdForPreviewHighlight] = useState<string | null>(null);
 
-  // OCR background job tracking (keyed by dataUrl to remain stable across renames)
-  const [ocrStatusByDataUrl, setOcrStatusByDataUrl] = useState<Record<string, 'pending'|'done'|'error'>>({});
-  const ocrStartedRef = useRef<Set<string>>(new Set());
+  // Frontend no longer performs automatic OCR detection — backend remains unchanged.
 
   const getEffectiveSkinClassName = useCallback((inputName: string): string => {
     let name = inputName.trim();
@@ -112,9 +109,7 @@ export const App: React.FC = () => {
       setPsdStructureCache(null);
       setSelectedElementIdForExmlHighlight(null);
       setSelectedElementIdForPreviewHighlight(null);
-  // Reset OCR state for a new PSD
-  setOcrStatusByDataUrl({});
-  ocrStartedRef.current = new Set();
+  // No frontend OCR state to reset (OCR is handled by backend on-demand)
       exmlLineRefs.current = {};
 
       try {
@@ -176,9 +171,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (psdStructureCache && parsedData && debouncedImagePrefix !== parsedData.generatingPrefix) {
       processAndSetData(psdStructureCache, debouncedImagePrefix);
-      // Reset OCR state when regenerating with a new prefix
-      setOcrStatusByDataUrl({});
-      ocrStartedRef.current = new Set();
+      // Frontend no longer runs OCR so there is no OCR state to reset
     }
   }, [debouncedImagePrefix, psdStructureCache, parsedData, processAndSetData]);
 
@@ -317,8 +310,7 @@ export const App: React.FC = () => {
 
   const handleCopyExmlAsGroup = useCallback(() => {
     if (parsedData && parsedData.elements.length > 0) {
-      const groupContent = parsedData.elements.map(el => generateExmlForElement(el, 1)).filter(Boolean).join('\n');
-      const groupExml = `<e:Group xmlns:e="http://ns.egret.com/eui" xmlns:w="http://ns.egret.com/wing" xmlns:ns1="*">\n${groupContent}\n</e:Group>`;
+      const groupExml = parsedData.elements.map(el => generateExmlForElement(el, 0)).filter(Boolean).join('\n');
       navigator.clipboard.writeText(groupExml)
         .then(() => {
           setExmlGroupCopied(true);
@@ -691,82 +683,8 @@ export const App: React.FC = () => {
     }
   };
 
-  // Kick off background OCR per unique image asset; update only IDs (resource names) when recognized.
-  useEffect(() => {
-    if (!parsedData) return;
-    const entries = Array.from(parsedData.imageAssets.entries()); // [resourceName, dataUrl]
-    if (entries.length === 0) return;
-
-    // A helper to ensure unique new names
-    const ensureUniqueName = (base: string, existing: Set<string>) => {
-      let attempt = `${base}_png`;
-      let idx = 0;
-      while (existing.has(attempt)) {
-        idx += 1;
-        attempt = `${base}_${idx}_png`;
-      }
-      return attempt;
-    };
-
-    // Build a set of current names for uniqueness checks
-    const currentNames = new Set<string>();
-    parsedData.imageAssets.forEach((_v, k) => currentNames.add(k));
-
-    entries.forEach(([resourceName, dataUrl]) => {
-      if (ocrStartedRef.current.has(dataUrl)) return; // already started
-      ocrStartedRef.current.add(dataUrl);
-      setOcrStatusByDataUrl(prev => ({ ...prev, [dataUrl]: 'pending' }));
-
-      // Fire and forget per image
-      (async () => {
-        try {
-          const res = await ocrContainsText(dataUrl, 1);
-          const recognized = (res && typeof res.text === 'string') ? res.text : '';
-          if (recognized.replace(/\s+/g, '').length >= 1) {
-            // Compute new name by prefixing text_img_
-            const baseNoPng = resourceName.replace(/_png$/, '');
-            const baseWithPrefix = baseNoPng.startsWith('text_img_') ? baseNoPng : `text_img_${baseNoPng}`;
-            const newName = ensureUniqueName(baseWithPrefix, currentNames);
-            currentNames.add(newName);
-
-            // Apply rename to parsedData immutably
-            setParsedData(prev => {
-              if (!prev) return prev;
-              // Update elements
-              const patchElements = (els: ExtractedLayer[]): ExtractedLayer[] =>
-                els.map(el => {
-                  if (el.type === 'image') {
-                    const img = el as ExtractedImageElement;
-                    if (img.name === resourceName) {
-                      return { ...img, name: newName };
-                    }
-                    return img;
-                  } else if ((el as any).children && Array.isArray((el as any).children)) {
-                    const group = el as ExtractedGroupElement | ExtractedXGroupButtonElement;
-                    return { ...group, children: patchElements(group.children) } as ExtractedLayer;
-                  }
-                  return el;
-                });
-
-              const newElements = patchElements(prev.elements);
-              // Update imageAssets map key
-              const newAssets = new Map(prev.imageAssets);
-              const data = newAssets.get(resourceName);
-              if (data) {
-                newAssets.delete(resourceName);
-                newAssets.set(newName, data);
-              }
-
-              return { ...prev, elements: newElements, imageAssets: newAssets };
-            });
-          }
-          setOcrStatusByDataUrl(prev => ({ ...prev, [dataUrl]: 'done' }));
-        } catch (e) {
-          setOcrStatusByDataUrl(prev => ({ ...prev, [dataUrl]: 'error' }));
-        }
-      })();
-    });
-  }, [parsedData]);
+  // NOTE: frontend no longer performs OCR. Any OCR operations should be invoked explicitly
+  // via backend endpoints from UI actions if needed (backend remains unchanged).
 
 
   return (
@@ -817,18 +735,7 @@ export const App: React.FC = () => {
                 isLoading={isLoading}
                 handleReprocessPsd={handleReprocessPsd}
                 psdFile={psdFile}
-                ocrProgress={(() => {
-                  if (!parsedData) return undefined;
-                  const total = parsedData.imageAssets.size;
-                  if (total === 0) return { pending: 0, total: 0 };
-                  let done = 0;
-                  parsedData.imageAssets.forEach((dataUrl) => {
-                    const st = ocrStatusByDataUrl[dataUrl];
-                    if (st === 'done' || st === 'error') done += 1;
-                  });
-                  const pending = Math.max(0, total - done);
-                  return { pending, total };
-                })()}
+                
               />
               <div className="flex-grow min-h-0 relative" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
                 {activeTab === 'images' && parsedData && (
@@ -836,7 +743,6 @@ export const App: React.FC = () => {
                     imageElementsToDisplay={imageElementsToDisplay}
                     isLoading={isLoading}
                     handleDownloadImage={(imageName, dataUrl) => handleDownloadImage(imageName, dataUrl)}
-                    ocrStatusByDataUrl={ocrStatusByDataUrl}
                   />
                 )}
                 {activeTab === 'code' && (

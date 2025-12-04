@@ -3,24 +3,24 @@ import { readPsd, Psd as AgPsdObject, Layer as AgPsdLayerInternalimport, Justifi
 import pinyin from 'pinyin';
 import { AgPsdColor } from '../types';
 import {
-  ExtractedLayer,
-  ParsedPsdData,
-  ExtractedImageElement,
-  ExtractedTextElement,
-  ExtractedRectElement,
-  RichTextNotification,
-  PsdLayer, // Our internal PsdLayer
-  PsdStructuralData,
-  ExtractedXGroupButtonElement,
-  ExtractedGroupElement,
-  ExtractedRewardBarElement,
-  ExtractedSimpleButtonElement,
-  AgPsdLayerMaskData,
-  PsdParsingError,
-  CssTextAlign,
-  StyleRunStyle,
-  PsdOverallTextStyle,
-  ExtractedBaseItemBoxElement
+    ExtractedLayer,
+    ParsedPsdData,
+    ExtractedImageElement,
+    ExtractedTextElement,
+    ExtractedRectElement,
+    RichTextNotification,
+    PsdLayer, // Our internal PsdLayer
+    PsdStructuralData,
+    ExtractedXGroupButtonElement,
+    ExtractedGroupElement,
+    ExtractedRewardBarElement,
+    ExtractedSimpleButtonElement,
+    AgPsdLayerMaskData,
+    PsdParsingError,
+    CssTextAlign,
+    StyleRunStyle,
+    PsdOverallTextStyle,
+    ExtractedBaseItemBoxElement
 } from '../types';
 
 // OCR is invoked asynchronously in App; no direct import here.
@@ -30,9 +30,9 @@ type AgPsdLayerAgPsd = AgPsdLayerInternalimport; // Renamed to avoid confusion w
 
 // Local interface for PSD warnings if PsdWarning is not directly exportable or causes issues.
 interface LocalPsdWarning {
-  message: string;
-  path?: (string | number)[];
-  [key: string]: any; // Allow other properties
+    message: string;
+    path?: (string | number)[];
+    [key: string]: any; // Allow other properties
 }
 
 
@@ -46,211 +46,206 @@ interface LocalPsdWarning {
 // needs careful setup to ensure dictionary files are correctly served and accessible by the browser.
 // This placeholder is NOT suitable for comprehensive CJK text processing in a production environment.
 const simpleRomajiMap: Record<string, string> = {
-  // Hiragana
-  'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
-  'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
-  'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
-  'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
-  'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
-  'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
-  'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
-  'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
-  'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
-  'わ': 'wa', 'を': 'wo', 'ん': 'n',
-  'が': 'ga', 'ぎ': 'gi', 'ぐ': 'gu', 'げ': 'ge', 'ご': 'go',
-  'ざ': 'za', 'じ': 'ji', 'ず': 'zu', 'ぜ': 'ze', 'ぞ': 'zo',
-  'だ': 'da', 'ぢ': 'ji', 'づ': 'zu', 'で': 'de', 'ど': 'do',
-  'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
-  'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
-  // Katakana
-  'ア': 'A', 'イ': 'I', 'ウ': 'U', 'エ': 'E', 'オ': 'O',
-  'カ': 'KA', 'キ': 'KI', 'ク': 'KU', 'ケ': 'KE', 'コ': 'KO',
-  'サ': 'SA', 'シ': 'SHI', 'ス': 'SU', 'セ': 'SE', 'ソ': 'SO',
-  'タ': 'TA', 'チ': 'CHI', 'ツ': 'TSU', 'テ': 'TE', 'ト': 'TO',
-  'ナ': 'NA', 'ニ': 'NI', 'ヌ': 'NU', 'ネ': 'NE', 'ノ': 'NO',
-  'ハ': 'HA', 'ヒ': 'HI', 'フ': 'FU', 'ヘ': 'HE', 'ホ': 'HO',
-  'マ': 'MA', 'ミ': 'MI', 'ム': 'MU', 'メ': 'ME', 'モ': 'MO',
-  'ヤ': 'YA', 'ユ': 'YU', 'ヨ': 'YO',
-  'ラ': 'RA', 'リ': 'RI', 'ル': 'RU', 'レ': 'RE', 'ロ': 'RO',
-  'ワ': 'WA', 'ヲ': 'WO', 'ン': 'N',
-  'ガ': 'GA', 'ギ': 'GI', 'グ': 'GU', 'ゲ': 'GE', 'ゴ': 'GO',
-  'ザ': 'ZA', 'ジ': 'JI', 'ヅ': 'ZU', 'ゼ': 'ZE', 'ゾ': 'ZO', // Corrected: 'ぜ' to 'ゼ'
-  'ダ': 'DA', 'ヂ': 'DI', 'デ': 'DE', 'ド': 'DO',
-  'バ': 'BA', 'ビ': 'BI', 'ブ': 'BU', 'ベ': 'BE', 'ボ': 'BO',
-  'パ': 'PA', 'ピ': 'PI', 'プ': 'PU', 'ペ': 'PE', 'ポ': 'PO',
-  // Common symbols and full-width numbers
-  'ー': '-', '、': ',', '。': '.',
-  '１': '1', '２': '2', '３': '3', '４': '4', '５': '5', '６': '6', '７': '7', '８': '8', '９': '9', '０': '0',
+    // Hiragana
+    'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+    'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
+    'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
+    'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
+    'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
+    'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
+    'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
+    'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
+    'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
+    'わ': 'wa', 'を': 'wo', 'ん': 'n',
+    'が': 'ga', 'ぎ': 'gi', 'ぐ': 'gu', 'げ': 'ge', 'ご': 'go',
+    'ざ': 'za', 'じ': 'ji', 'ず': 'zu', 'ぜ': 'ze', 'ぞ': 'zo',
+    'だ': 'da', 'ぢ': 'ji', 'づ': 'zu', 'で': 'de', 'ど': 'do',
+    'ば': 'ba', 'び': 'bi', 'ぶ': 'bu', 'べ': 'be', 'ぼ': 'bo',
+    'ぱ': 'pa', 'ぴ': 'pi', 'ぷ': 'pu', 'ぺ': 'pe', 'ぽ': 'po',
+    // Katakana
+    'ア': 'A', 'イ': 'I', 'ウ': 'U', 'エ': 'E', 'オ': 'O',
+    'カ': 'KA', 'キ': 'KI', 'ク': 'KU', 'ケ': 'KE', 'コ': 'KO',
+    'サ': 'SA', 'シ': 'SHI', 'ス': 'SU', 'セ': 'SE', 'ソ': 'SO',
+    'タ': 'TA', 'チ': 'CHI', 'ツ': 'TSU', 'テ': 'TE', 'ト': 'TO',
+    'ナ': 'NA', 'ニ': 'NI', 'ヌ': 'NU', 'ネ': 'NE', 'ノ': 'NO',
+    'ハ': 'HA', 'ヒ': 'HI', 'フ': 'FU', 'ヘ': 'HE', 'ホ': 'HO',
+    'マ': 'MA', 'ミ': 'MI', 'ム': 'MU', 'メ': 'ME', 'モ': 'MO',
+    'ヤ': 'YA', 'ユ': 'YU', 'ヨ': 'YO',
+    'ラ': 'RA', 'リ': 'RI', 'ル': 'RU', 'レ': 'RE', 'ロ': 'RO',
+    'ワ': 'WA', 'ヲ': 'WO', 'ン': 'N',
+    'ガ': 'GA', 'ギ': 'GI', 'グ': 'GU', 'ゲ': 'GE', 'ゴ': 'GO',
+    'ザ': 'ZA', 'ジ': 'JI', 'ヅ': 'ZU', 'ゼ': 'ZE', 'ゾ': 'ZO', // Corrected: 'ぜ' to 'ゼ'
+    'ダ': 'DA', 'ヂ': 'DI', 'デ': 'DE', 'ド': 'DO',
+    'バ': 'BA', 'ビ': 'BI', 'ブ': 'BU', 'ベ': 'BE', 'ボ': 'BO',
+    'パ': 'PA', 'ピ': 'PI', 'プ': 'PU', 'ペ': 'PE', 'ポ': 'PO',
+    // Common symbols and full-width numbers
+    'ー': '-', '、': ',', '。': '.',
+    '１': '1', '２': '2', '３': '3', '４': '4', '５': '5', '６': '6', '７': '7', '８': '8', '９': '9', '０': '0',
 };
 
-function convertToRomaji(text: string): string {
-  let result = '';
-  for (const char of text) {
-    result += simpleRomajiMap[char] || char; // Fallback to original char if not in map
-  }
-  return result;
-}
+
+// convertToRomaji removed (unused) — simpleRomajiMap is used directly where needed
 
 function convertToPinyin(text: string): string {
-  try {
-    const pinyinArray = pinyin(text, {
-      style: pinyin.STYLE_NORMAL,
-      heteronym: false,
-    });
-    return pinyinArray.map(arr => arr[0]).join('');
-  } catch (error) {
-    console.warn(`Pinyin conversion failed for "${text}". Falling back to original character.`, error);
-    return text;
-  }
+    try {
+        const pinyinArray = pinyin(text, {
+            style: pinyin.STYLE_NORMAL,
+            heteronym: false,
+        });
+        return pinyinArray.map(arr => arr[0]).join('');
+    } catch (error) {
+        console.warn(`Pinyin conversion failed for "${text}". Falling back to original character.`, error);
+        return text;
+    }
 }
 
 // Enhanced global sanitizer: CJK -> Pinyin/Romaji, Camel/Pascal -> snake_case, general sanitization
 function convertToSnakeCaseAndSanitize(name?: string): string {
-  if (!name || name.trim() === "") return 'unnamed_layer';
+    if (!name || name.trim() === "") return 'unnamed_layer';
 
-  let processedName = "";
-  // 1. CJK to Pinyin/Romaji
-  for (const char of name) {
-    if (/[\u4e00-\u9fa5]/.test(char)) { // Chinese characters
-      processedName += convertToPinyin(char);
-    } else if (simpleRomajiMap[char]) { // Japanese Kana (from our limited map)
-      processedName += simpleRomajiMap[char];
-    } else {
-      processedName += char;
+    let processedName = "";
+    // 1. CJK to Pinyin/Romaji
+    for (const char of name) {
+        if (/[\u4e00-\u9fa5]/.test(char)) { // Chinese characters
+            processedName += convertToPinyin(char);
+        } else if (simpleRomajiMap[char]) { // Japanese Kana (from our limited map)
+            processedName += simpleRomajiMap[char];
+        } else {
+            processedName += char;
+        }
     }
-  }
 
-  // 2. Convert to snake_case from CamelCase/PascalCase
-  let snakeCased = processedName
-    .replace(/([A-Z]+)([A-Z][a-z0-9])/g, '$1_$2') // Handles "XMLData" -> "XML_Data"
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')    // Handles "canReceive" or "CanReceive" -> "can_Receive"
-    .toLowerCase(); // Convert everything to lowercase
+    // 2. Convert to snake_case from CamelCase/PascalCase
+    let snakeCased = processedName
+        .replace(/([A-Z]+)([A-Z][a-z0-9])/g, '$1_$2') // Handles "XMLData" -> "XML_Data"
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')    // Handles "canReceive" or "CanReceive" -> "can_Receive"
+        .toLowerCase(); // Convert everything to lowercase
 
-  // 3. General sanitization: replace non-alphanumeric (except underscore) with underscore
-  snakeCased = snakeCased.replace(/[^a-z0-9_]/g, '_');
+    // 3. General sanitization: replace non-alphanumeric (except underscore) with underscore
+    snakeCased = snakeCased.replace(/[^a-z0-9_]/g, '_');
 
-  // 4. Collapse multiple underscores and trim leading/trailing underscores
-  snakeCased = snakeCased.replace(/__+/g, '_');
-  snakeCased = snakeCased.replace(/^_+|_+$/g, '');
+    // 4. Collapse multiple underscores and trim leading/trailing underscores
+    snakeCased = snakeCased.replace(/__+/g, '_');
+    snakeCased = snakeCased.replace(/^_+|_+$/g, '');
 
-  if (snakeCased === "" || snakeCased === "_") return 'sanitized_layer';
+    if (snakeCased === "" || snakeCased === "_") return 'sanitized_layer';
 
-  return snakeCased;
+    return snakeCased;
 }
 
 
 // Generates resource names like "img_can_receive" from "imgCanReceive"
 function generateResourceNameForImgLayer(originalName: string): string {
-  const nameLower = originalName.toLowerCase();
-  let basePart = originalName;
-  const imgPrefixPart = "img"; // The "img" part of the name
+    const nameLower = originalName.toLowerCase();
+    let basePart = originalName;
+    const imgPrefixPart = "img"; // The "img" part of the name
 
-  if (nameLower.startsWith("img")) {
-    basePart = originalName.substring(3); // Part after "img"
-  }
-  // This function is intended for "img" prefixed names.
+    if (nameLower.startsWith("img")) {
+        basePart = originalName.substring(3); // Part after "img"
+    }
+    // This function is intended for "img" prefixed names.
 
-  // Remove leading non-alphanumeric characters (like underscores) from basePart
-  // e.g., if originalName was "img_Button", basePart becomes "Button"
-  basePart = basePart.replace(/^[^a-zA-Z0-9]+/, '');
+    // Remove leading non-alphanumeric characters (like underscores) from basePart
+    // e.g., if originalName was "img_Button", basePart becomes "Button"
+    basePart = basePart.replace(/^[^a-zA-Z0-9]+/, '');
 
-  if (!basePart) { // If originalName was "img" or "img_" or "img___"
-    return imgPrefixPart; // Results in "img" as base, leading to "prefix_img_png"
-  }
+    if (!basePart) { // If originalName was "img" or "img_" or "img___"
+        return imgPrefixPart; // Results in "img" as base, leading to "prefix_img_png"
+    }
 
-  // Convert the rest of the name (e.g., "CanReceive") to snake_case
-  const snakeCaseSuffix = convertToSnakeCaseAndSanitize(basePart);
+    // Convert the rest of the name (e.g., "CanReceive") to snake_case
+    const snakeCaseSuffix = convertToSnakeCaseAndSanitize(basePart);
 
-  return `${imgPrefixPart}_${snakeCaseSuffix}`; // e.g., img_can_receive
+    return `${imgPrefixPart}_${snakeCaseSuffix}`; // e.g., img_can_receive
 }
 
 
 function generateNameForGroup(originalLayerName: string): string {
-  const prefixRegex = /^(grp_?)/i; // Matches 'grp' or 'grp_'
-  let suffix = originalLayerName;
+    const prefixRegex = /^(grp_?)/i; // Matches 'grp' or 'grp_'
+    let suffix = originalLayerName;
 
-  const match = originalLayerName.match(prefixRegex);
-  if (match) {
-    suffix = originalLayerName.substring(match[0].length);
-  }
-
-  let processedSuffix = "";
-  for (const char of suffix) {
-    if (/[\u4e00-\u9fa5]/.test(char)) {
-      processedSuffix += convertToPinyin(char);
-    } else if (simpleRomajiMap[char]) {
-      processedSuffix += simpleRomajiMap[char];
-    } else {
-      processedSuffix += char;
+    const match = originalLayerName.match(prefixRegex);
+    if (match) {
+        suffix = originalLayerName.substring(match[0].length);
     }
-  }
-  suffix = processedSuffix;
 
-  suffix = suffix.replace(/[^a-zA-Z0-9_]/g, '_');
-  suffix = suffix.replace(/__+/g, '_');
-  suffix = suffix.replace(/^_+|_+$/g, '');
+    let processedSuffix = "";
+    for (const char of suffix) {
+        if (/[\u4e00-\u9fa5]/.test(char)) {
+            processedSuffix += convertToPinyin(char);
+        } else if (simpleRomajiMap[char]) {
+            processedSuffix += simpleRomajiMap[char];
+        } else {
+            processedSuffix += char;
+        }
+    }
+    suffix = processedSuffix;
 
-  if (suffix === "") {
-    suffix = "defaultGroup";
-  }
+    suffix = suffix.replace(/[^a-zA-Z0-9_]/g, '_');
+    suffix = suffix.replace(/__+/g, '_');
+    suffix = suffix.replace(/^_+|_+$/g, '');
 
-  const parts = suffix.split('_').filter(p => p.length > 0);
-  let idPart;
-  if (parts.length === 0) {
-    idPart = "DefaultGroup";
-  } else {
-    idPart = parts.map((part) => {
-      if (!part) return "";
-      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
-    }).join('');
-  }
+    if (suffix === "") {
+        suffix = "defaultGroup";
+    }
 
-  if (!idPart) {
-    idPart = "DefaultGroup";
-  }
+    const parts = suffix.split('_').filter(p => p.length > 0);
+    let idPart;
+    if (parts.length === 0) {
+        idPart = "DefaultGroup";
+    } else {
+        idPart = parts.map((part) => {
+            if (!part) return "";
+            return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+        }).join('');
+    }
 
-  const finalName = 'grp' + idPart;
-  return finalName;
+    if (!idPart) {
+        idPart = "DefaultGroup";
+    }
+
+    const finalName = 'grp' + idPart;
+    return finalName;
 }
 
 
 const buildLayerTreeRecursive = (layers: AgPsdLayerAgPsd[] | undefined): PsdLayer[] => {
-  if (!layers) return [];
-  const result: PsdLayer[] = [];
+    if (!layers) return [];
+    const result: PsdLayer[] = [];
 
-  for (const layer of layers) {
-    if (layer.hidden === true) {
-      continue;
-    }
-
-    const processedLayer: PsdLayer = { ...(layer as any), meta: {} };
-    const layerNameLower = layer.name?.toLowerCase();
-
-    // Check for special types first, but "img" prefix priority is handled in processLayerListToExtractedElements
-    if (layerNameLower?.startsWith('rewardbar')) {
-      processedLayer.meta!.isRewardBar = true;
-    } else if (layerNameLower?.startsWith('item')) {
-        processedLayer.meta!.isBaseItemBox = true;
-    }
-    // Only mark as group types if not an "img" prefixed layer that will be flattened
-    else if (layer.children && layer.children.length > 0 && !layerNameLower?.startsWith('img')) {
-        if (layerNameLower?.startsWith('btn')) {
-          processedLayer.meta!.isXGroupButton = true;
-        } else {
-          processedLayer.meta!.isSimpleGroup = true;
+    for (const layer of layers) {
+        if (layer.hidden === true) {
+            continue;
         }
+
+        const processedLayer: PsdLayer = { ...(layer as any), meta: {} };
+        const layerNameLower = layer.name?.toLowerCase();
+
+        // Check for special types first, but "img" prefix priority is handled in processLayerListToExtractedElements
+        if (layerNameLower?.startsWith('rewardbar')) {
+            processedLayer.meta!.isRewardBar = true;
+        } else if (layerNameLower?.startsWith('item')) {
+            processedLayer.meta!.isBaseItemBox = true;
+        }
+        // Only mark as group types if not an "img" prefixed layer that will be flattened
+        else if (layer.children && layer.children.length > 0 && !layerNameLower?.startsWith('img')) {
+            if (layerNameLower?.startsWith('btn')) {
+                processedLayer.meta!.isXGroupButton = true;
+            } else {
+                processedLayer.meta!.isSimpleGroup = true;
+            }
+        }
+        // Recurse children for all layers, including "img" groups (which might be flattened later)
+        if (layer.children && layer.children.length > 0) {
+            processedLayer.children = buildLayerTreeRecursive(layer.children);
+        }
+        result.push(processedLayer);
     }
-    // Recurse children for all layers, including "img" groups (which might be flattened later)
-    if (layer.children && layer.children.length > 0) {
-        processedLayer.children = buildLayerTreeRecursive(layer.children);
-    }
-    result.push(processedLayer);
-  }
-  return result;
+    return result;
 };
 
 export function agPsdColorToHex(colorInput: AgPsdColor | undefined): string {
-    if (!colorInput || typeof colorInput !== 'object' ) {
+    if (!colorInput || typeof colorInput !== 'object') {
         return "#000000"; // Default to black in #RRGGBB format
     }
 
@@ -285,7 +280,7 @@ export function agPsdColorToHex(colorInput: AgPsdColor | undefined): string {
         gNum = Math.round(c.Values[2] * 255);
         bNum = Math.round(c.Values[3] * 255);
     }
-    else if (Array.isArray(colorInput) && colorInput.length >=3) {
+    else if (Array.isArray(colorInput) && colorInput.length >= 3) {
         rNum = Math.round(colorInput[0]);
         gNum = Math.round(colorInput[1]);
         bNum = Math.round(colorInput[2]);
@@ -303,8 +298,8 @@ export function agPsdColorToHex(colorInput: AgPsdColor | undefined): string {
 
 
 interface LayerOutputTypeResult {
-  type: 'text' | 'image';
-  reason?: string;
+    type: 'text' | 'image';
+    reason?: string;
 }
 
 export function getEffect(effect: any | any[] | undefined): any | undefined { // Exported
@@ -315,153 +310,153 @@ export function getEffect(effect: any | any[] | undefined): any | undefined { //
 }
 
 function checkForSignificantEffects(layer: PsdLayer): boolean {
-  if (layer.effects?.disabled === true) {
-    return false;
-  }
-  if (layer.effects) {
-    const effects = layer.effects;
-    if (getEffect(effects.dropShadow)?.enabled) return true;
-    if (getEffect(effects.innerShadow)?.enabled) return true;
-    if (getEffect(effects.outerGlow)?.enabled) return true;
-    if (getEffect(effects.innerGlow)?.enabled) return true;
-    if (getEffect(effects.bevelAndEmboss)?.enabled) return true;
-    if (getEffect(effects.satin)?.enabled) return true;
-    if (getEffect(effects.gradientOverlay)?.enabled) return true;
-    if (getEffect(effects.patternOverlay)?.enabled) return true;
+    if (layer.effects?.disabled === true) {
+        return false;
+    }
+    if (layer.effects) {
+        const effects = layer.effects;
+        if (getEffect(effects.dropShadow)?.enabled) return true;
+        if (getEffect(effects.innerShadow)?.enabled) return true;
+        if (getEffect(effects.outerGlow)?.enabled) return true;
+        if (getEffect(effects.innerGlow)?.enabled) return true;
+        if (getEffect(effects.bevelAndEmboss)?.enabled) return true;
+        if (getEffect(effects.satin)?.enabled) return true;
+        if (getEffect(effects.gradientOverlay)?.enabled) return true;
+        if (getEffect(effects.patternOverlay)?.enabled) return true;
 
-    const layerStrokeEffect = getEffect(effects.stroke);
-    if (layerStrokeEffect?.enabled && layerStrokeEffect.size?.value > 0) {
-        if (layerStrokeEffect.fillType && layerStrokeEffect.fillType !== 'solidColor') {
-            return true;
+        const layerStrokeEffect = getEffect(effects.stroke);
+        if (layerStrokeEffect?.enabled && layerStrokeEffect.size?.value > 0) {
+            if (layerStrokeEffect.fillType && layerStrokeEffect.fillType !== 'solidColor') {
+                return true;
+            }
+        }
+
+        const solidFillEffect = getEffect(effects.solidFill);
+        if (solidFillEffect?.enabled) {
+            if (typeof solidFillEffect.opacity === 'number' && solidFillEffect.opacity < 1.0) {
+                return true;
+            }
+            if (solidFillEffect.blendMode && solidFillEffect.blendMode !== 'normal') {
+                return true;
+            }
         }
     }
-
-    const solidFillEffect = getEffect(effects.solidFill);
-    if (solidFillEffect?.enabled) {
-      if (typeof solidFillEffect.opacity === 'number' && solidFillEffect.opacity < 1.0) {
-        return true;
-      }
-      if (solidFillEffect.blendMode && solidFillEffect.blendMode !== 'normal') {
-        return true;
-      }
-    }
-  }
-  return false;
+    return false;
 }
 
 
 function determineLayerOutputType(layer: PsdLayer): LayerOutputTypeResult {
-  if (!layer.text || !layer.text.text) {
-    const reason = layer.text ? "Text layer rasterized: Text layer has no actual text content." : undefined;
-    return { type: 'image', reason: reason };
-  }
-
-  const textLayerPrefix = "Text layer rasterized: ";
-
-  if (layer.effects?.disabled === true) {
-    return { type: 'text' };
-  }
-
-  if (layer.effects) {
-    const effects = layer.effects;
-    if (getEffect(effects.dropShadow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Drop Shadow effect.` };
-    if (getEffect(effects.innerShadow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Inner Shadow effect.` };
-    if (getEffect(effects.outerGlow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Outer Glow effect.` };
-    if (getEffect(effects.innerGlow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Inner Glow effect.` };
-    if (getEffect(effects.bevelAndEmboss)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Bevel/Emboss effect.` };
-    if (getEffect(effects.satin)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Satin effect.` };
-    if (getEffect(effects.gradientOverlay)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Gradient Overlay effect.` };
-    if (getEffect(effects.patternOverlay)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Pattern Overlay effect.` };
-
-    const solidFillEffect = getEffect(effects.solidFill);
-    if (solidFillEffect?.enabled) {
-      if (typeof solidFillEffect.opacity === 'number' && solidFillEffect.opacity < 0.99) {
-        return { type: 'image', reason: `${textLayerPrefix}Color Overlay opacity is ${(solidFillEffect.opacity * 100).toFixed(0)}%.` };
-      }
-      if (solidFillEffect.blendMode && solidFillEffect.blendMode !== 'normal') {
-        return { type: 'image', reason: `${textLayerPrefix}Color Overlay uses '${solidFillEffect.blendMode}' blend mode.` };
-      }
+    if (!layer.text || !layer.text.text) {
+        const reason = layer.text ? "Text layer rasterized: Text layer has no actual text content." : undefined;
+        return { type: 'image', reason: reason };
     }
-  }
-  return { type: 'text' };
+
+    const textLayerPrefix = "Text layer rasterized: ";
+
+    if (layer.effects?.disabled === true) {
+        return { type: 'text' };
+    }
+
+    if (layer.effects) {
+        const effects = layer.effects;
+        if (getEffect(effects.dropShadow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Drop Shadow effect.` };
+        if (getEffect(effects.innerShadow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Inner Shadow effect.` };
+        if (getEffect(effects.outerGlow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Outer Glow effect.` };
+        if (getEffect(effects.innerGlow)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Inner Glow effect.` };
+        if (getEffect(effects.bevelAndEmboss)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Bevel/Emboss effect.` };
+        if (getEffect(effects.satin)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Satin effect.` };
+        if (getEffect(effects.gradientOverlay)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Gradient Overlay effect.` };
+        if (getEffect(effects.patternOverlay)?.enabled) return { type: 'image', reason: `${textLayerPrefix}Contains Pattern Overlay effect.` };
+
+        const solidFillEffect = getEffect(effects.solidFill);
+        if (solidFillEffect?.enabled) {
+            if (typeof solidFillEffect.opacity === 'number' && solidFillEffect.opacity < 0.99) {
+                return { type: 'image', reason: `${textLayerPrefix}Color Overlay opacity is ${(solidFillEffect.opacity * 100).toFixed(0)}%.` };
+            }
+            if (solidFillEffect.blendMode && solidFillEffect.blendMode !== 'normal') {
+                return { type: 'image', reason: `${textLayerPrefix}Color Overlay uses '${solidFillEffect.blendMode}' blend mode.` };
+            }
+        }
+    }
+    return { type: 'text' };
 }
 
 interface SolidRectCheckResult {
-  isSolidRect: boolean;
-  fillColor?: string;
-  fillAlpha?: number;
+    isSolidRect: boolean;
+    fillColor?: string;
+    fillAlpha?: number;
 }
 
 function checkCanvasForSolidColor(canvas: HTMLCanvasElement): SolidRectCheckResult {
-  if (!canvas || canvas.width === 0 || canvas.height === 0) {
-    return { isSolidRect: false };
-  }
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return { isSolidRect: false };
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-
-  let firstVisibleIndex = -1;
-  for (let i = 0; i < data.length; i += 4) {
-      if (data[i+3] > 0) {
-          firstVisibleIndex = i;
-          break;
-      }
-  }
-
-  if (firstVisibleIndex === -1) {
-      return { isSolidRect: true, fillColor: "#000000", fillAlpha: 0 }; // Default to transparent black
-  }
-
-  const r1 = data[firstVisibleIndex];
-  const g1 = data[firstVisibleIndex+1];
-  const b1 = data[firstVisibleIndex+2];
-  const a1 = data[firstVisibleIndex+3];
-
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i] !== r1 || data[i+1] !== g1 || data[i+2] !== b1 || data[i+3] !== a1) {
-      return { isSolidRect: false };
+    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        return { isSolidRect: false };
     }
-  }
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return { isSolidRect: false };
 
-  const toHex = (val: number) => val.toString(16).padStart(2, '0');
-  return {
-    isSolidRect: true,
-    fillColor: `#${(toHex(r1) + toHex(g1) + toHex(b1)).toUpperCase()}`, // Return #RRGGBB
-    fillAlpha: a1 / 255,
-  };
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    let firstVisibleIndex = -1;
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 0) {
+            firstVisibleIndex = i;
+            break;
+        }
+    }
+
+    if (firstVisibleIndex === -1) {
+        return { isSolidRect: true, fillColor: "#000000", fillAlpha: 0 }; // Default to transparent black
+    }
+
+    const r1 = data[firstVisibleIndex];
+    const g1 = data[firstVisibleIndex + 1];
+    const b1 = data[firstVisibleIndex + 2];
+    const a1 = data[firstVisibleIndex + 3];
+
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i] !== r1 || data[i + 1] !== g1 || data[i + 2] !== b1 || data[i + 3] !== a1) {
+            return { isSolidRect: false };
+        }
+    }
+
+    const toHex = (val: number) => val.toString(16).padStart(2, '0');
+    return {
+        isSolidRect: true,
+        fillColor: `#${(toHex(r1) + toHex(g1) + toHex(b1)).toUpperCase()}`, // Return #RRGGBB
+        fillAlpha: a1 / 255,
+    };
 }
 
 export const extractPsdStructure = async (file: File): Promise<PsdStructuralData> => {
-  const arrayBuffer = await file.arrayBuffer();
-  const parsingErrors: PsdParsingError[] = [];
+    const arrayBuffer = await file.arrayBuffer();
+    const parsingErrors: PsdParsingError[] = [];
 
-  const psd = readPsd(arrayBuffer, {
-    skipLayerImageData: false,
-    throwForMissingFeatures: false,
-  });
-
-  const psdWithPotentialWarnings = psd as AgPsdObject & { warnings?: LocalPsdWarning[] };
-
-  if (psdWithPotentialWarnings.warnings && psdWithPotentialWarnings.warnings.length > 0) {
-    psdWithPotentialWarnings.warnings.forEach(warning => {
-      const pathString = warning.path ? (warning.path as (string|number)[]).join(' > ') : undefined;
-      parsingErrors.push({
-        message: warning.message || "Unknown ag-psd warning",
-        layerName: pathString,
-        errorObject: warning,
-      });
-      console.warn(`[ag-psd Parser Warning]${pathString ? ` Path: ${pathString}` : ''}: ${warning.message}`);
+    const psd = readPsd(arrayBuffer, {
+        skipLayerImageData: false,
+        throwForMissingFeatures: false,
     });
-  }
 
-  if (!psd.width || !psd.height) {
-    throw new Error("Invalid PSD data: Missing width or height information. The file might be corrupted or not a valid PSD.");
-  }
+    const psdWithPotentialWarnings = psd as AgPsdObject & { warnings?: LocalPsdWarning[] };
 
-  const allLayers = buildLayerTreeRecursive(psd.children);
-  return { psd, allLayers, parsingErrors };
+    if (psdWithPotentialWarnings.warnings && psdWithPotentialWarnings.warnings.length > 0) {
+        psdWithPotentialWarnings.warnings.forEach(warning => {
+            const pathString = warning.path ? (warning.path as (string | number)[]).join(' > ') : undefined;
+            parsingErrors.push({
+                message: warning.message || "Unknown ag-psd warning",
+                layerName: pathString,
+                errorObject: warning,
+            });
+            console.warn(`[ag-psd Parser Warning]${pathString ? ` Path: ${pathString}` : ''}: ${warning.message}`);
+        });
+    }
+
+    if (!psd.width || !psd.height) {
+        throw new Error("Invalid PSD data: Missing width or height information. The file might be corrupted or not a valid PSD.");
+    }
+
+    const allLayers = buildLayerTreeRecursive(psd.children);
+    return { psd, allLayers, parsingErrors };
 };
 
 function calculatePixelValue(
@@ -540,9 +535,9 @@ function applyLayerMaskToCanvas(
                 alphaValue = 255 - alphaValue;
             }
             data[i] = 0;
-            data[i+1] = 0;
-            data[i+2] = 0;
-            data[i+3] = alphaValue;
+            data[i + 1] = 0;
+            data[i + 2] = 0;
+            data[i + 3] = alphaValue;
         }
         alphaCtx.putImageData(imageData, 0, 0);
     } catch (e) {
@@ -640,19 +635,19 @@ function applyOpacityToCanvas(canvas: HTMLCanvasElement, opacity: number): HTMLC
 }
 
 function agPsdJustificationToCssTextAlign(justification: AgPsdJustification | undefined): CssTextAlign | undefined {
-  if (justification === undefined) return undefined;
-  switch (justification) {
-    case 'justify-left':
-      return 'left';
-    case 'justify-right':
-      return 'right';
-    case 'justify-center':
-      return 'center';
-    case 'justify-all':
-      return 'left';
-    default:
-      return justification;
-  }
+    if (justification === undefined) return undefined;
+    switch (justification) {
+        case 'justify-left':
+            return 'left';
+        case 'justify-right':
+            return 'right';
+        case 'justify-center':
+            return 'center';
+        case 'justify-all':
+            return 'left';
+        default:
+            return justification;
+    }
 }
 
 let globalElementIdCounter = 0;
@@ -886,12 +881,36 @@ function processLayerListToExtractedElements(
                 continue;
             }
 
+            // Create a map from originalName to layer bounds for text elements
+            const layerBoundsMap = new Map<string, { left: number; top: number; right: number; bottom: number }>();
+            if (layer.children) {
+                for (const childLayer of layer.children) {
+                    if (childLayer.name && childLayer.text) {
+                        layerBoundsMap.set(childLayer.name, {
+                            left: childLayer.left ?? 0,
+                            top: childLayer.top ?? 0,
+                            right: childLayer.right ?? (childLayer.left ?? 0),
+                            bottom: childLayer.bottom ?? (childLayer.top ?? 0),
+                        });
+                    }
+                }
+            }
+
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             absoluteChildrenElements.forEach(child => {
-                minX = Math.min(minX, child.x);
-                minY = Math.min(minY, child.y);
-                maxX = Math.max(maxX, child.x + (child.width || 0));
-                maxY = Math.max(maxY, child.y + (child.height || 0));
+                // For text elements with zero width, use the original layer bounds for more accurate sizing
+                if (child.type === 'text' && child.width === 0 && layerBoundsMap.has(child.originalName)) {
+                    const bounds = layerBoundsMap.get(child.originalName)!;
+                    minX = Math.min(minX, bounds.left);
+                    minY = Math.min(minY, bounds.top);
+                    maxX = Math.max(maxX, bounds.right);
+                    maxY = Math.max(maxY, bounds.bottom);
+                } else {
+                    minX = Math.min(minX, child.x);
+                    minY = Math.min(minY, child.y);
+                    maxX = Math.max(maxX, child.x + (child.width || 0));
+                    maxY = Math.max(maxY, child.y + (child.height || 0));
+                }
             });
 
             const groupX = (minX === Infinity) ? layerLeftPx : minX;
@@ -900,8 +919,8 @@ function processLayerListToExtractedElements(
             const groupHeight = (maxY === -Infinity || minY === Infinity) ? 0 : maxY - minY;
 
             if (groupWidth <= 0 || groupHeight <= 0) {
-                 console.warn(`${isXGroupButton ? 'XGroupButton' : 'Simple Group'} "${layerOriginalName}" calculated bounding box has zero or negative dimensions. Skipping group generation.`);
-                 continue;
+                console.warn(`${isXGroupButton ? 'XGroupButton' : 'Simple Group'} "${layerOriginalName}" calculated bounding box has zero or negative dimensions. Skipping group generation.`);
+                continue;
             }
 
             const relativeChildrenElements = absoluteChildrenElements.map(child => ({
@@ -945,7 +964,7 @@ function processLayerListToExtractedElements(
                     (!solidFillEffect.blendMode || solidFillEffect.blendMode === 'normal')) {
                     authoritativeFillColor = agPsdColorToHex(solidFillEffect.color);
                     if (typeof solidFillEffect.opacity === 'number') {
-                         authoritativeBaseAlpha = Math.max(0, Math.min(1, solidFillEffect.opacity));
+                        authoritativeBaseAlpha = Math.max(0, Math.min(1, solidFillEffect.opacity));
                     }
                 } else if (solidFillEffect?.enabled && solidFillEffect.blendMode && solidFillEffect.blendMode !== 'normal') {
                     isDisqualifiedByVectorProperties = true;
@@ -987,7 +1006,7 @@ function processLayerListToExtractedElements(
                     const vectorBounding = vectorOriginDescriptor.keyOriginShapeBoundingBox;
 
                     if (!vectorBounding) continue;
-                    
+
                     let cornerRadius: number | undefined = undefined;
                     const radii = vectorOriginDescriptor.keyOriginRRectRadii;
                     // Use the top-left radius for all corners as a simplification for now.
@@ -1119,7 +1138,7 @@ function processLayerListToExtractedElements(
             const layerActualHeight = (layer.bottom ?? layerTopPx) - layerTopPx;
 
             let finalX: number, finalY: number;
-            let finalWidth: number; 
+            let finalWidth: number;
             let finalHeight: number = layerActualHeight; // EXML height is original layer height
             let calculatedRotationDegrees: number | undefined = undefined;
             let anchorOffsetX: number | undefined = undefined;
@@ -1163,16 +1182,17 @@ function processLayerListToExtractedElements(
             } else {
                 finalWidth = 0;
             }
-            finalHeight = 0;
+            // Do not zero finalHeight here — for multi-line text we'll compute a measured
+            // height after line spacing calculations so the element doesn't get skipped.
 
 
             if (textData.transform) {
-                const [xx, xy, yx, _yy, _tx, _ty] = textData.transform;
+                const [xx, _xy, yx, _yy, _tx, _ty] = textData.transform;
                 const angleRad = Math.atan2(yx, xx);
                 let angleDeg = angleRad * (180 / Math.PI);
                 if (Math.abs(angleDeg) > 0.01) {
                     calculatedRotationDegrees = -angleDeg;
-                    
+
                     anchorOffsetX = finalWidth / 2;
                     anchorOffsetY = finalHeight / 2;
 
@@ -1189,15 +1209,15 @@ function processLayerListToExtractedElements(
             }
 
             finalWidth = Math.max(0, finalWidth);
-            finalHeight = Math.max(0, finalHeight); 
+            finalHeight = Math.max(0, finalHeight);
 
             if (finalWidth < 0.1 || finalHeight < 0.1) {
-                 if (!textData.text.includes('\n') && finalWidth === 0) {
+                if (!textData.text.includes('\n') && finalWidth === 0) {
                     // This is OK for single-line text, width is auto.
-                 } else {
+                } else {
                     console.warn(`Text layer "${layerOriginalName}" has zero or near-zero dimensions after adjustments. Skipping. W:${finalWidth}, H:${finalHeight}`);
                     continue;
-                 }
+                }
             }
 
 
@@ -1210,12 +1230,27 @@ function processLayerListToExtractedElements(
                 }
             }
 
+            // For multi-line text, compute a measured height based on number of lines
+            // and the primary font size + line spacing so the element has positive height
+            // and won't be skipped by the zero-dimension guard above.
+            if (textData.text.includes('\n')) {
+                try {
+                    const lines = textData.text.split('\n');
+                    const lineCount = Math.max(1, lines.length);
+                    const spacing = primaryLineSpacing ?? 0;
+                    const measuredHeight = Math.ceil(lineCount * primaryFontSize + Math.max(0, (lineCount - 1) * spacing));
+                    finalHeight = Math.max(finalHeight || 0, measuredHeight);
+                } catch {
+                    // On error, fall back to the original layer height already stored in finalHeight
+                }
+            }
+
             let primaryTextColor = agPsdColorToHex(textData.style?.fillColor);
             if (layer.effects?.disabled !== true) {
                 const solidFillEffect = getEffect(layer.effects?.solidFill);
                 if (solidFillEffect?.enabled && solidFillEffect.color &&
                     (!solidFillEffect.blendMode || solidFillEffect.blendMode === 'normal') &&
-                    (typeof solidFillEffect.opacity !== 'number' || solidFillEffect.opacity >= 0.99 )) {
+                    (typeof solidFillEffect.opacity !== 'number' || solidFillEffect.opacity >= 0.99)) {
                     primaryTextColor = agPsdColorToHex(solidFillEffect.color);
                 }
             }
@@ -1227,7 +1262,7 @@ function processLayerListToExtractedElements(
                 const layerStrokeEffectData = layer.effects?.stroke;
                 if (layerStrokeEffectData) {
                     const activeLayerEffectStroke = (Array.isArray(layerStrokeEffectData) ? layerStrokeEffectData : [layerStrokeEffectData])
-                        .find(s => s?.enabled && s.size?.value && s.size.value > 0 && s.color && s.fillType === 'solidColor');
+                        .find(s => s?.enabled && s.size?.value && s.size.value > 0 && s.color && (s.fillType === 'solidColor' || s.fillType === 'color' && s.position === 'outside'));
                     if (activeLayerEffectStroke) {
                         primaryStrokeSize = activeLayerEffectStroke.size.value;
                         primaryStrokeColor = agPsdColorToHex(activeLayerEffectStroke.color);
@@ -1253,7 +1288,7 @@ function processLayerListToExtractedElements(
 
             let primaryTextAlign: CssTextAlign | undefined;
             if (textData.paragraphStyle?.justification !== undefined) {
-                 primaryTextAlign = agPsdJustificationToCssTextAlign(textData.paragraphStyle.justification);
+                primaryTextAlign = agPsdJustificationToCssTextAlign(textData.paragraphStyle.justification);
             }
 
             const extractedIsRichText = !!(textData.styleRuns && textData.styleRuns.length > 0);
@@ -1420,25 +1455,25 @@ function processLayerListToExtractedElements(
 
 
 export const generateElementsFromStructure = async (
-  structuralData: PsdStructuralData,
-  imageResourcePrefix: string = ''
+    structuralData: PsdStructuralData,
+    imageResourcePrefix: string = ''
 ): Promise<ParsedPsdData> => {
-  const { psd, allLayers } = structuralData;
-  if (!psd.width || !psd.height) {
-    throw new Error("Invalid structural PSD data: Missing width or height information.");
-  }
+    const { psd, allLayers } = structuralData;
+    if (!psd.width || !psd.height) {
+        throw new Error("Invalid structural PSD data: Missing width or height information.");
+    }
 
-  globalElementIdCounter = 0;
-  const uniqueImageDataUrls = new Map<string, string>();
-  const richTextNotifications: RichTextNotification[] = [];
+    globalElementIdCounter = 0;
+    const uniqueImageDataUrls = new Map<string, string>();
+    const richTextNotifications: RichTextNotification[] = [];
 
-  const extractedElements = processLayerListToExtractedElements(
-      allLayers,
-      psd,
-      imageResourcePrefix,
-      uniqueImageDataUrls,
-      richTextNotifications
-  );
+    const extractedElements = processLayerListToExtractedElements(
+        allLayers,
+        psd,
+        imageResourcePrefix,
+        uniqueImageDataUrls,
+        richTextNotifications
+    );
 
     // OCR-based renaming moved to App (background task) so initial render is not blocked.
 
@@ -1447,12 +1482,12 @@ export const generateElementsFromStructure = async (
         imageAssets.set(resourceName, dataUrl);
     });
 
-  return {
-    width: psd.width,
-    height: psd.height,
-    elements: extractedElements,
-    richTextNotifications,
-    generatingPrefix: imageResourcePrefix,
-    imageAssets: imageAssets,
-  };
+    return {
+        width: psd.width,
+        height: psd.height,
+        elements: extractedElements,
+        richTextNotifications,
+        generatingPrefix: imageResourcePrefix,
+        imageAssets: imageAssets,
+    };
 };

@@ -53,8 +53,10 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
     }
     // Set height for Label if available, to match PSD bounding box.
     // Egret Labels auto-size height if not set, which might differ from PSD.
+    // Height must not be less than fontSize.
     if (typeof textEl.height === 'number' && textEl.height > 0) {
-      labelAttrs.push(`height="${Math.round(textEl.height)}"`);
+      const minHeight = Math.round(textEl.fontSize);
+      labelAttrs.push(`height="${Math.max(Math.round(textEl.height), minHeight)}"`);
     }
     
     const exmlFriendlyText = textEl.text.replace(/\r\n|\r|\n/g, '\\n');

@@ -8,26 +8,24 @@ interface ImageGalleryTabProps {
   imageElementsToDisplay: ImageTabDisplayItem[];
   isLoading: boolean;
   handleDownloadImage: (imageName: string, dataUrl: string) => void;
-  // Optional OCR status map keyed by dataUrl (stable key even if name changes).
-  ocrStatusByDataUrl?: Record<string, 'pending' | 'done' | 'error'>;
+  // (removed) frontend no longer tracks OCR status — backend-only OCR
 }
 
 export const ImageGalleryTab: React.FC<ImageGalleryTabProps> = ({
   imageElementsToDisplay,
   isLoading,
   handleDownloadImage,
-  ocrStatusByDataUrl,
 }) => {
   return (
     <div className="overflow-y-auto h-full pb-4">
       {imageElementsToDisplay.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {imageElementsToDisplay.map((item) => (
-            <ElementPreviewCard
+              <ElementPreviewCard
               key={item.id + (item.isFromSimpleButton ? '_sbi_asset' : (item.isFromBaseItemBox ? '_bib_asset' : '_img_asset'))}
               element={item}
               onDownloadImage={!isLoading && item.type === 'image' ? () => handleDownloadImage(item.name, item.dataUrl) : undefined}
-              ocrState={ocrStatusByDataUrl ? ocrStatusByDataUrl[item.dataUrl] : undefined}
+              
             />
           ))}
         </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ParsedPsdData, PsdStructuralData, ExtractedLayer, ExtractedTextElement, PsdLayer, AgPsdObject, StyleRunStyle, PsdOverallTextStyle, RichTextNotification } from '../types';
+import { ParsedPsdData, PsdStructuralData, ExtractedLayer, ExtractedTextElement, PsdLayer, AgPsdObject, RichTextNotification } from '../types';
 import { agPsdColorToHex } from '../services/psdProcessor';
 import { InfoIcon, ClipboardDocumentIcon, TextIcon as NoRichTextIcon } from './icons'; // Changed from RichTextIcon
 
