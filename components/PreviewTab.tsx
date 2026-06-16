@@ -204,7 +204,7 @@ interface PreviewTabProps {
   exmlLineRefs: React.MutableRefObject<Record<string, HTMLPreElement | null>>;
   getEffectiveSkinClassName: (inputName: string) => string;
   skinClassNameInput: string;
-  findSelectedElementDetails: (targetId: string | null, allElements: ExtractedLayer[]) => { targetElement: ExtractedLayer; topLevelAncestor: ExtractedLayer; effectiveIndentLevel: number; } | null;
+  findSelectedElementDetails: (targetId: string | null, allElements: ExtractedLayer[], skinWidth?: number) => { targetElement: ExtractedLayer; topLevelAncestor: ExtractedLayer; effectiveIndentLevel: number; parentWidth: number; } | null;
 }
 
 export const PreviewTab: React.FC<PreviewTabProps> = ({
@@ -245,8 +245,8 @@ export const PreviewTab: React.FC<PreviewTabProps> = ({
               <pre className="text-xs text-sky-300"><code>{'<?xml version="1.0" encoding="utf-8"?>'}</code></pre>
               <pre className="text-xs text-sky-300"><code>{`<e:Skin class="skins.${getEffectiveSkinClassName(skinClassNameInput)}" width="${Math.round(parsedData.width)}" height="${Math.round(parsedData.height)}" xmlns:e="http://ns.egret.com/eui" xmlns:w="http://ns.egret.com/wing" xmlns:ns1="*">`}</code></pre>
               {parsedData.elements.map(el => {
-                const elExml = generateExmlForElement(el, 1);
-                const details = findSelectedElementDetails(selectedElementIdForExmlHighlight, parsedData.elements);
+                const elExml = generateExmlForElement(el, 1, Math.round(parsedData.width));
+                const details = findSelectedElementDetails(selectedElementIdForExmlHighlight, parsedData.elements, parsedData.width);
                 const isSelectedOrAncestorOfSelected = el.id === selectedElementIdForExmlHighlight || (details?.topLevelAncestor.id === el.id && details?.targetElement.id !== el.id);
                 return (
                   <pre

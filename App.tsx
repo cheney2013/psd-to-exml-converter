@@ -31,6 +31,7 @@ interface SelectedElementDetails {
   targetElement: ExtractedLayer;
   topLevelAncestor: ExtractedLayer;
   effectiveIndentLevel: number;
+  parentWidth: number;
 }
 
 
@@ -226,43 +227,46 @@ export const App: React.FC = () => {
   }, []);
 
   const findSelectedElementDetails = useCallback((
-    targetId: string | null, 
-    allElements: ExtractedLayer[]
+    targetId: string | null,
+    allElements: ExtractedLayer[],
+    skinWidth: number = 0
   ): SelectedElementDetails | null => {
-    if (!targetId) return null; 
+    if (!targetId) return null;
     let targetElement: ExtractedLayer | undefined;
     let topLevelAncestor: ExtractedLayer | undefined;
     let effectiveIndentLevel = 0;
+    let foundParentWidth = 0;
 
-    const findRecursively = (elements: ExtractedLayer[], currentTopLevel: ExtractedLayer | undefined, currentIndent: number): boolean => {
+    const findRecursively = (elements: ExtractedLayer[], currentTopLevel: ExtractedLayer | undefined, currentIndent: number, currentParentWidth: number): boolean => {
         for (const el of elements) {
             if (el.id === targetId) {
                 targetElement = el;
                 topLevelAncestor = currentTopLevel || el;
                 effectiveIndentLevel = currentIndent;
+                foundParentWidth = currentParentWidth;
                 return true;
             }
             if (hasChildren(el)) {
-                if (findRecursively(el.children, currentTopLevel || el, currentIndent + 1)) return true;
+                if (findRecursively(el.children, currentTopLevel || el, currentIndent + 1, Math.round(el.width))) return true;
             }
         }
         return false;
     };
-    for (const topEl of allElements) { if (findRecursively([topEl], topEl, 1)) break; }
-    if (targetElement && topLevelAncestor) return { targetElement, topLevelAncestor, effectiveIndentLevel };
+    for (const topEl of allElements) { if (findRecursively([topEl], topEl, 1, skinWidth)) break; }
+    if (targetElement && topLevelAncestor) return { targetElement, topLevelAncestor, effectiveIndentLevel, parentWidth: foundParentWidth };
     return null;
   }, []);
 
   useEffect(() => {
     const currentSelection = window.getSelection();
     if (activeTab === 'preview' && parsedData && selectedElementIdForExmlHighlight && scrollableExmlPanelRef.current && currentSelection) {
-        const details = findSelectedElementDetails(selectedElementIdForExmlHighlight, parsedData.elements);
+        const details = findSelectedElementDetails(selectedElementIdForExmlHighlight, parsedData.elements, parsedData.width);
         if (details) {
-            const { targetElement, topLevelAncestor, effectiveIndentLevel } = details;
+            const { targetElement, topLevelAncestor, effectiveIndentLevel, parentWidth } = details;
             const ancestorPreElement = exmlLineRefs.current[topLevelAncestor.id];
             if (ancestorPreElement?.firstChild?.nodeType === Node.ELEMENT_NODE && (ancestorPreElement.firstChild as HTMLElement).tagName === 'CODE' && ancestorPreElement.firstChild.firstChild?.nodeType === Node.TEXT_NODE) {
                 const textNode = ancestorPreElement.firstChild.firstChild as Text;
-                const targetExmlString = generateExmlForElement(targetElement, effectiveIndentLevel);
+                const targetExmlString = generateExmlForElement(targetElement, effectiveIndentLevel, parentWidth);
                 const fullAncestorExmlInNode = textNode.textContent || "";
                 const startIndex = fullAncestorExmlInNode.indexOf(targetExmlString);
                 if (startIndex !== -1) {
@@ -310,7 +314,7 @@ export const App: React.FC = () => {
 
   const handleCopyExmlAsGroup = useCallback(() => {
     if (parsedData && parsedData.elements.length > 0) {
-      const groupExml = parsedData.elements.map(el => generateExmlForElement(el, 0)).filter(Boolean).join('\n');
+      const groupExml = parsedData.elements.map(el => generateExmlForElement(el, 0, Math.round(parsedData.width))).filter(Boolean).join('\n');
       navigator.clipboard.writeText(groupExml)
         .then(() => {
           setExmlGroupCopied(true);

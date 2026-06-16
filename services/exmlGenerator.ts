@@ -26,9 +26,36 @@ function hexToEgretColor(hexColor: string | undefined): string {
 
 const REFERENCE_DIMENSION = 147; // For RewardBar and BaseItemBox scaling
 
-export function generateExmlForElement(el: ExtractedLayer, indentLevel: number): string {
+// Reuse a single canvas context across measurements (same as Egret's canvasHitTestBuffer).
+let _measureCtx: CanvasRenderingContext2D | null = null;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (!_measureCtx) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    _measureCtx = canvas.getContext('2d');
+    if (_measureCtx) {
+      _measureCtx.textAlign = 'left';
+      _measureCtx.textBaseline = 'middle';
+    }
+  }
+  return _measureCtx;
+}
+
+// Replicates egret.sys.measureText() exactly:
+// font = "[italic ][bold ]{size}px {family}"
+function measureEgretTextWidth(text: string, fontSize: number, fontFamily?: string): number {
+  const ctx = getMeasureCtx();
+  if (!ctx || !text) return 0;
+  const size = (typeof fontSize === 'number' && fontSize > 0) ? fontSize : 12;
+  const family = (typeof fontFamily === 'string' && fontFamily !== '') ? fontFamily : 'Arial';
+  ctx.font = `${size}px ${family}`;
+  return Math.ceil(ctx.measureText(text).width);
+}
+
+export function generateExmlForElement(el: ExtractedLayer, indentLevel: number, parentWidth: number = 0): string {
   const indent = ' '.repeat(indentLevel * 4);
-  
+
   const roundedX = Math.round(el.x);
   const roundedY = Math.round(el.y);
   const roundedWidth = Math.round(el.width);
@@ -43,12 +70,20 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
       labelAttrs.push(`id="${escapeXml(textEl.originalName)}"`);
     }
 
-    // x and y are now either top-left or center based on rotation
-    if (roundedX !== 0) labelAttrs.push(`x="${roundedX}"`);
+    // For horizontalCenter we need to know the element's layout width.
+    // Multi-line text has an explicit width from the PSD; single-line text (width=0) is
+    // auto-sized by Egret at runtime, so we measure it with the same canvas logic Egret
+    // uses (egret.sys.measureText → font string "[italic ][bold ]{size}px {family}").
+    const hasKnownWidth = typeof textEl.width === 'number' && textEl.width > 0;
+    const layoutWidth = hasKnownWidth
+      ? roundedWidth
+      : measureEgretTextWidth(textEl.text, textEl.fontSize, textEl.fontFamily);
+    const labelHorizontalCenter = Math.round((roundedX + layoutWidth / 2) - parentWidth / 2);
+    labelAttrs.push(`horizontalCenter="${labelHorizontalCenter}"`);
     if (roundedY !== 0) labelAttrs.push(`y="${roundedY}"`);
-    
-    // width and height are of the (potentially rotated) bounding box
-    if (typeof textEl.width === 'number' && textEl.width > 0) { 
+
+    // Only set explicit width for multi-line text; single-line auto-sizes in Egret.
+    if (hasKnownWidth) {
       labelAttrs.push(`width="${Math.round(textEl.width)}"`);
     }
     // Set height for Label if available, to match PSD bounding box.
@@ -109,11 +144,11 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
     
     imgAttrs.push(`source="${imgEl.name}"`); // name is the resource name (e.g. prefix_imgLogo_png)
 
-    if (roundedX !== 0) imgAttrs.push(`x="${roundedX}"`);
+    const imgHorizontalCenter = Math.round((roundedX + roundedWidth / 2) - parentWidth / 2);
+    imgAttrs.push(`horizontalCenter="${imgHorizontalCenter}"`);
     if (roundedY !== 0) imgAttrs.push(`y="${roundedY}"`);
-    // Opacity is baked into the image dataUrl for "img" prefixed layers and others,
-    // so no alpha attribute is needed here generally.
-    // If specific alpha was needed for non-baked images, it would be added here.
+    imgAttrs.push(`width="${roundedWidth}"`);
+    imgAttrs.push(`height="${roundedHeight}"`);
     return `${indent}<e:Image ${imgAttrs.join(' ')}/>`;
   
   } else if (el.type === 'rect') {
@@ -151,7 +186,8 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
 
     groupBtnAttrs.push(`id="${groupBtnEl.name}"`); // name is the EXML id (e.g., "btnMyButton")
 
-    if (centerX !== 0) groupBtnAttrs.push(`x="${centerX}"`);
+    const groupBtnHorizontalCenter = Math.round(centerX - parentWidth / 2);
+    groupBtnAttrs.push(`horizontalCenter="${groupBtnHorizontalCenter}"`);
     if (centerY !== 0) groupBtnAttrs.push(`y="${centerY}"`);
     
     groupBtnAttrs.push(`width="${roundedWidth}"`);
@@ -166,7 +202,7 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
     let groupButtonXml = `${indent}<ns1:XGroupButton ${groupBtnAttrs.join(' ')}>\n`;
     if (groupBtnEl.children && groupBtnEl.children.length > 0) {
       groupButtonXml += groupBtnEl.children
-        .map(child => generateExmlForElement(child, indentLevel + 1))
+        .map(child => generateExmlForElement(child, indentLevel + 1, roundedWidth))
         .filter(Boolean)
         .join('\n');
       groupButtonXml += '\n';
@@ -185,7 +221,8 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
 
     simpleBtnAttrs.push(`id="${simpleBtnEl.name}"`); // name is the EXML id (e.g., "submitIcon")
 
-    if (centerX !== 0) simpleBtnAttrs.push(`x="${centerX}"`);
+    const simpleBtnHorizontalCenter = Math.round(centerX - parentWidth / 2);
+    simpleBtnAttrs.push(`horizontalCenter="${simpleBtnHorizontalCenter}"`);
     if (centerY !== 0) simpleBtnAttrs.push(`y="${centerY}"`);
     
     simpleBtnAttrs.push(`width="${roundedWidth}"`);
@@ -207,7 +244,8 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
     const groupEl = el as ExtractedGroupElement;
     const groupPlainAttrs: string[] = [];
 
-    if (roundedX !== 0) groupPlainAttrs.push(`x="${roundedX}"`);
+    const groupHorizontalCenter = Math.round((roundedX + roundedWidth / 2) - parentWidth / 2);
+    groupPlainAttrs.push(`horizontalCenter="${groupHorizontalCenter}"`);
     if (roundedY !== 0) groupPlainAttrs.push(`y="${roundedY}"`);
     groupPlainAttrs.push(`width="${roundedWidth}"`);
     groupPlainAttrs.push(`height="${roundedHeight}"`);
@@ -215,11 +253,11 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number):
     if (typeof groupEl.opacity === 'number' && groupEl.opacity < 0.99) {
         groupPlainAttrs.push(`alpha="${Number(groupEl.opacity.toFixed(2))}"`);
     }
-        
+
     let groupXml = `${indent}<e:Group ${groupPlainAttrs.join(' ')}>\n`;
     if (groupEl.children && groupEl.children.length > 0) {
       groupXml += groupEl.children
-        .map(child => generateExmlForElement(child, indentLevel + 1))
+        .map(child => generateExmlForElement(child, indentLevel + 1, roundedWidth))
         .filter(Boolean)
         .join('\n');
       groupXml += '\n';
@@ -291,7 +329,7 @@ export const generateExml = (parsedPsdData: ParsedPsdData, effectiveSkinClassNam
   if (!parsedPsdData) return '';
 
   const elementsXml = parsedPsdData.elements
-    .map(el => generateExmlForElement(el, 1)) 
+    .map(el => generateExmlForElement(el, 1, Math.round(parsedPsdData.width)))
     .filter(Boolean)
     .join('\n');
   
