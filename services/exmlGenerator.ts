@@ -1,4 +1,4 @@
-import { ParsedPsdData, ExtractedLayer, ExtractedTextElement, ExtractedImageElement, ExtractedRectElement, ExtractedXGroupButtonElement, ExtractedGroupElement, ExtractedRewardBarElement, ExtractedSimpleButtonElement, ExtractedBaseItemBoxElement } from '../types';
+import { ParsedPsdData, ExtractedLayer, ExtractedTextElement, ExtractedImageElement, ExtractedRectElement, ExtractedXGroupButtonElement, ExtractedGroupElement, ExtractedRewardBarElement, ExtractedSimpleButtonElement, ExtractedBaseItemBoxElement, ExtractedPanelBottomBarElement } from '../types';
 
 function escapeXml(unsafe: string): string {
   return unsafe.replace(/[<>&'"]/g, function (c) {
@@ -321,6 +321,21 @@ export function generateExmlForElement(el: ExtractedLayer, indentLevel: number, 
     }
 
     return `${indent}<ns1:BaseItemBox ${itemBoxAttrs.join(' ')}/>`;
+  } else if (el.type === 'panelBottomBar') {
+    const pbbEl = el as ExtractedPanelBottomBarElement;
+    const pbbAttrs: string[] = [];
+
+    pbbAttrs.push(`id="${pbbEl.name}"`);
+    pbbAttrs.push(`skinName="skins.PanelBottomBarSkin"`);
+
+    if (roundedX !== 0) pbbAttrs.push(`x="${roundedX}"`);
+    if (roundedY !== 0) pbbAttrs.push(`y="${roundedY}"`);
+
+    if (typeof pbbEl.opacity === 'number' && pbbEl.opacity < 0.99) {
+        pbbAttrs.push(`alpha="${Number(pbbEl.opacity.toFixed(2))}"`);
+    }
+
+    return `${indent}<ns1:PanelBottomBar ${pbbAttrs.join(' ')}/>`;
   }
   return '';
 }

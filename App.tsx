@@ -27,12 +27,7 @@ const hasChildren = (el: ExtractedLayer): el is (ExtractedXGroupButtonElement | 
   return (el.type === 'xGroupButton' || el.type === 'group') && Array.isArray((el as ExtractedXGroupButtonElement | ExtractedGroupElement).children);
 };
 
-interface SelectedElementDetails {
-  targetElement: ExtractedLayer;
-  topLevelAncestor: ExtractedLayer;
-  effectiveIndentLevel: number;
-  parentWidth: number;
-}
+
 
 
 export const App: React.FC = () => {
@@ -59,10 +54,10 @@ export const App: React.FC = () => {
   const [copiedTextFlowId, setCopiedTextFlowId] = useState<string | null>(null);
 
   const scrollableExmlPanelRef = useRef<HTMLDivElement>(null);
-  const exmlLineRefs = useRef<Record<string, HTMLPreElement | null>>({});
+  const exmlLineRefs = useRef<Record<string, HTMLElement | null>>({});
+  const previewElementRefs = useRef<Record<string, HTMLElement | null>>({});
 
-  const [selectedElementIdForExmlHighlight, setSelectedElementIdForExmlHighlight] = useState<string | null>(null);
-  const [selectedElementIdForPreviewHighlight, setSelectedElementIdForPreviewHighlight] = useState<string | null>(null);
+  const [selectedElementIds, setSelectedElementIds] = useState<Set<string>>(new Set());
 
   // Frontend no longer performs automatic OCR detection — backend remains unchanged.
 
@@ -87,8 +82,7 @@ export const App: React.FC = () => {
       const data = await generateElementsFromStructure(structure, currentImagePrefix);
       setParsedData(data);
       setParsingIssues(structure.parsingErrors || []);
-      setSelectedElementIdForExmlHighlight(null);
-      setSelectedElementIdForPreviewHighlight(null);
+      setSelectedElementIds(new Set());
     } catch (err) {
       console.error("Error generating elements from structure:", err);
       setCriticalError(err instanceof Error ? err.message : "An unknown error occurred during element generation.");
@@ -108,8 +102,7 @@ export const App: React.FC = () => {
       setGeneratedTypeScript('');
       setCopiedTextFlowId(null);
       setPsdStructureCache(null);
-      setSelectedElementIdForExmlHighlight(null);
-      setSelectedElementIdForPreviewHighlight(null);
+      setSelectedElementIds(new Set());
   // No frontend OCR state to reset (OCR is handled by backend on-demand)
       exmlLineRefs.current = {};
 
@@ -226,80 +219,60 @@ export const App: React.FC = () => {
     return undefined;
   }, []);
 
-  const findSelectedElementDetails = useCallback((
-    targetId: string | null,
-    allElements: ExtractedLayer[],
-    skinWidth: number = 0
-  ): SelectedElementDetails | null => {
-    if (!targetId) return null;
-    let targetElement: ExtractedLayer | undefined;
-    let topLevelAncestor: ExtractedLayer | undefined;
-    let effectiveIndentLevel = 0;
-    let foundParentWidth = 0;
 
-    const findRecursively = (elements: ExtractedLayer[], currentTopLevel: ExtractedLayer | undefined, currentIndent: number, currentParentWidth: number): boolean => {
-        for (const el of elements) {
-            if (el.id === targetId) {
-                targetElement = el;
-                topLevelAncestor = currentTopLevel || el;
-                effectiveIndentLevel = currentIndent;
-                foundParentWidth = currentParentWidth;
-                return true;
-            }
-            if (hasChildren(el)) {
-                if (findRecursively(el.children, currentTopLevel || el, currentIndent + 1, Math.round(el.width))) return true;
-            }
-        }
-        return false;
-    };
-    for (const topEl of allElements) { if (findRecursively([topEl], topEl, 1, skinWidth)) break; }
-    if (targetElement && topLevelAncestor) return { targetElement, topLevelAncestor, effectiveIndentLevel, parentWidth: foundParentWidth };
-    return null;
-  }, []);
 
-  useEffect(() => {
-    const currentSelection = window.getSelection();
-    if (activeTab === 'preview' && parsedData && selectedElementIdForExmlHighlight && scrollableExmlPanelRef.current && currentSelection) {
-        const details = findSelectedElementDetails(selectedElementIdForExmlHighlight, parsedData.elements, parsedData.width);
-        if (details) {
-            const { targetElement, topLevelAncestor, effectiveIndentLevel, parentWidth } = details;
-            const ancestorPreElement = exmlLineRefs.current[topLevelAncestor.id];
-            if (ancestorPreElement?.firstChild?.nodeType === Node.ELEMENT_NODE && (ancestorPreElement.firstChild as HTMLElement).tagName === 'CODE' && ancestorPreElement.firstChild.firstChild?.nodeType === Node.TEXT_NODE) {
-                const textNode = ancestorPreElement.firstChild.firstChild as Text;
-                const targetExmlString = generateExmlForElement(targetElement, effectiveIndentLevel, parentWidth);
-                const fullAncestorExmlInNode = textNode.textContent || "";
-                const startIndex = fullAncestorExmlInNode.indexOf(targetExmlString);
-                if (startIndex !== -1) {
-                    currentSelection.removeAllRanges();
-                    const range = document.createRange();
-                    range.setStart(textNode, startIndex);
-                    range.setEnd(textNode, startIndex + targetExmlString.length);
-                    currentSelection.addRange(range);
-                    // Scroll logic for selected EXML element (simplified)
-                    ancestorPreElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                } else { currentSelection.removeAllRanges(); }
-            } else { currentSelection.removeAllRanges(); }
-        } else { currentSelection.removeAllRanges(); }
-    } else if (currentSelection && activeTab === 'preview' && !selectedElementIdForExmlHighlight) {
-        currentSelection.removeAllRanges();
-    }
-  }, [selectedElementIdForExmlHighlight, activeTab, parsedData, findSelectedElementDetails]);
-
-  const handleElementClickInPreview = useCallback((clickedElementId: string) => {
+  // handleCodeLineClick: clicking a code line highlights the corresponding preview element
+  const handleCodeLineClick = useCallback((clickedElementId: string, isMultiSelect: boolean = false) => {
     if (!parsedData) return;
     if (clickedElementId === '') {
-      setSelectedElementIdForPreviewHighlight(null);
-      setSelectedElementIdForExmlHighlight(null);
+      setSelectedElementIds(new Set());
       return;
     }
-    let elementToHighlightInPreview = clickedElementId;
-    if (clickedElementId === selectedElementIdForPreviewHighlight) {
-      const parentOfCurrent = findParentOfElementRecursive(parsedData.elements, clickedElementId);
-      if (parentOfCurrent) elementToHighlightInPreview = parentOfCurrent.id;
+    
+    setSelectedElementIds(prev => {
+      if (isMultiSelect) {
+        const newSet = new Set(prev);
+        if (newSet.has(clickedElementId)) newSet.delete(clickedElementId);
+        else newSet.add(clickedElementId);
+        return newSet;
+      }
+      return new Set([clickedElementId]);
+    });
+    
+    if (!isMultiSelect) {
+      requestAnimationFrame(() => {
+        const previewEl = previewElementRefs.current[clickedElementId];
+        if (previewEl) {
+          previewEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
     }
-    setSelectedElementIdForPreviewHighlight(elementToHighlightInPreview);
-    setSelectedElementIdForExmlHighlight(elementToHighlightInPreview);
-  }, [parsedData, selectedElementIdForPreviewHighlight, findParentOfElementRecursive]);
+  }, [parsedData]);
+
+  const handleElementClickInPreview = useCallback((clickedElementId: string, isMultiSelect: boolean = false) => {
+    if (!parsedData) return;
+    if (clickedElementId === '') {
+      setSelectedElementIds(new Set());
+      return;
+    }
+    
+    let elementToHighlightInPreview = clickedElementId;
+    setSelectedElementIds(prev => {
+        if (!isMultiSelect && prev.size === 1 && prev.has(clickedElementId)) {
+            const parentOfCurrent = findParentOfElementRecursive(parsedData.elements, clickedElementId);
+            if (parentOfCurrent) elementToHighlightInPreview = parentOfCurrent.id;
+            return new Set([elementToHighlightInPreview]);
+        }
+        
+        if (isMultiSelect) {
+            const newSet = new Set(prev);
+            if (newSet.has(clickedElementId)) newSet.delete(clickedElementId);
+            else newSet.add(clickedElementId);
+            return newSet;
+        }
+        return new Set([elementToHighlightInPreview]);
+    });
+  }, [parsedData, findParentOfElementRecursive]);
 
   const handleCopyExml = useCallback(() => {
     if (generatedExml) {
@@ -641,7 +614,6 @@ export const App: React.FC = () => {
     return displayItems;
   }, [parsedData]);
 
-
   const handleDownloadAllImages = async () => {
     if (!parsedData || parsedData.imageAssets.size === 0) {
       alert("No images to download.");
@@ -692,8 +664,8 @@ export const App: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-gray-200 p-4 md:p-8 flex flex-col">
-      <div className="max-w-7xl mx-auto w-full">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 text-gray-200 p-4 md:p-8 flex flex-col">
+      <div className="max-w-7xl mx-auto w-full flex-shrink-0">
         <AppHeader
           imagePrefix={imagePrefix}
           setImagePrefix={setImagePrefix}
@@ -771,13 +743,14 @@ export const App: React.FC = () => {
                     parsedData={parsedData}
                     psdStructureCache={psdStructureCache}
                     handleElementClickInPreview={handleElementClickInPreview}
-                    selectedElementIdForPreviewHighlight={selectedElementIdForPreviewHighlight}
-                    selectedElementIdForExmlHighlight={selectedElementIdForExmlHighlight}
+                    handleCodeLineClick={handleCodeLineClick}
+                    selectedElementIds={selectedElementIds}
+                    setSelectedElementIds={setSelectedElementIds}
                     scrollableExmlPanelRef={scrollableExmlPanelRef}
                     exmlLineRefs={exmlLineRefs}
+                    previewElementRefs={previewElementRefs}
                     getEffectiveSkinClassName={getEffectiveSkinClassName}
                     skinClassNameInput={skinClassNameInput}
-                    findSelectedElementDetails={findSelectedElementDetails}
                   />
                 )}
                 {activeTab === 'richTextInfo' && parsedData && (

@@ -31,7 +31,7 @@ export type AgPsdLayerMaskData = AgPsdLayerMaskDataOriginal;
 export type CssTextAlign = 'left' | 'right' | 'center' | 'justify' | 'start' | 'end';
 
 
-export type LayerType = 'image' | 'text' | 'rect' | 'xGroupButton' | 'group' | 'rewardBar' | 'simpleButton' | 'baseItemBox';
+export type LayerType = 'image' | 'text' | 'rect' | 'xGroupButton' | 'group' | 'rewardBar' | 'simpleButton' | 'baseItemBox' | 'panelBottomBar';
 
 export interface ExtractedElementBase {
   id: string;
@@ -107,6 +107,11 @@ export interface ExtractedSimpleButtonElement extends ExtractedElementBase {
   // The 'name' property (from ExtractedElementBase) will be the 'id' for the XSimpleButton (e.g. "submitIcon")
 }
 
+export interface ExtractedPanelBottomBarElement extends ExtractedElementBase {
+  type: 'panelBottomBar';
+  dataUrl?: string;
+}
+
 
 export type ExtractedLayer =
   ExtractedImageElement |
@@ -116,7 +121,8 @@ export type ExtractedLayer =
   ExtractedGroupElement |
   ExtractedRewardBarElement |
   ExtractedSimpleButtonElement |
-  ExtractedBaseItemBoxElement;
+  ExtractedBaseItemBoxElement |
+  ExtractedPanelBottomBarElement;
 
 export interface RichTextNotification {
   layerName: string;
@@ -165,6 +171,7 @@ export interface StyleRunStyle {
   fauxItalic?: boolean;
   leading?: number; // Line height (baseline to baseline) in points
   tracking?: number;
+  baselineShift?: number;
   textEngineData?: any; // Added for potential deeper text engine style access like stroke width
   // ... any other style properties that ag-psd might provide per run
 }
@@ -269,6 +276,7 @@ export interface PsdLayer {
     isSimpleGroup?: boolean;
     isRewardBar?: boolean;
     isBaseItemBox?: boolean;
+    isPanelBottomBar?: boolean;
   };
 }
 

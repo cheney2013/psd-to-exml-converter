@@ -20,7 +20,8 @@ import {
     CssTextAlign,
     StyleRunStyle,
     PsdOverallTextStyle,
-    ExtractedBaseItemBoxElement
+    ExtractedBaseItemBoxElement,
+    ExtractedPanelBottomBarElement
 } from '../types';
 
 // OCR is invoked asynchronously in App; no direct import here.
@@ -226,6 +227,8 @@ const buildLayerTreeRecursive = (layers: AgPsdLayerAgPsd[] | undefined): PsdLaye
             processedLayer.meta!.isRewardBar = true;
         } else if (layerNameLower?.startsWith('item')) {
             processedLayer.meta!.isBaseItemBox = true;
+        } else if (layerNameLower?.startsWith('pbb')) {
+            processedLayer.meta!.isPanelBottomBar = true;
         }
         // Only mark as group types if not an "img" prefixed layer that will be flattened
         else if (layer.children && layer.children.length > 0 && !layerNameLower?.startsWith('img')) {
@@ -391,7 +394,7 @@ function checkCanvasForSolidColor(canvas: HTMLCanvasElement): SolidRectCheckResu
     if (!canvas || canvas.width === 0 || canvas.height === 0) {
         return { isSolidRect: false };
     }
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null;
     if (!ctx) return { isSolidRect: false };
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -503,7 +506,7 @@ function applyLayerMaskToCanvas(
     const resultCanvas = document.createElement('canvas');
     resultCanvas.width = baseCanvas.width;
     resultCanvas.height = baseCanvas.height;
-    const ctx = resultCanvas.getContext('2d');
+    const ctx = resultCanvas.getContext('2d') as CanvasRenderingContext2D | null;
 
     if (!ctx) {
         console.warn("Failed to get 2D context for mask application. Returning original canvas.");
@@ -515,7 +518,7 @@ function applyLayerMaskToCanvas(
     const alphaMaskCanvas = document.createElement('canvas');
     alphaMaskCanvas.width = maskCanvas.width;
     alphaMaskCanvas.height = maskCanvas.height;
-    const alphaCtx = alphaMaskCanvas.getContext('2d', { willReadFrequently: true });
+    const alphaCtx = alphaMaskCanvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null;
 
     if (!alphaCtx) {
         console.warn("Failed to get 2D context for alpha mask preparation. Returning original canvas.");
@@ -566,7 +569,7 @@ function trimTransparentPixels(canvas: HTMLCanvasElement): TrimResult {
         return { trimmedCanvas: canvas, offsetX: 0, offsetY: 0 };
     }
 
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null;
     if (!ctx) {
         return { trimmedCanvas: canvas, offsetX: 0, offsetY: 0 };
     }
@@ -602,7 +605,7 @@ function trimTransparentPixels(canvas: HTMLCanvasElement): TrimResult {
     const trimmedCanvas = document.createElement('canvas');
     trimmedCanvas.width = trimmedWidth;
     trimmedCanvas.height = trimmedHeight;
-    const trimmedCtx = trimmedCanvas.getContext('2d');
+    const trimmedCtx = trimmedCanvas.getContext('2d') as CanvasRenderingContext2D | null;
 
     if (!trimmedCtx) {
         return { trimmedCanvas: canvas, offsetX: 0, offsetY: 0 };
@@ -621,7 +624,7 @@ function applyOpacityToCanvas(canvas: HTMLCanvasElement, opacity: number): HTMLC
     const newCanvas = document.createElement('canvas');
     newCanvas.width = canvas.width;
     newCanvas.height = canvas.height;
-    const ctx = newCanvas.getContext('2d');
+    const ctx = newCanvas.getContext('2d') as CanvasRenderingContext2D | null;
 
     if (!ctx) {
         console.warn("Failed to get 2D context for opacity application. Returning original canvas.");
@@ -714,7 +717,7 @@ function processLayerListToExtractedElements(
             const dataUrlCanvas = document.createElement('canvas');
             dataUrlCanvas.width = finalVisibleWidth;
             dataUrlCanvas.height = finalVisibleHeight;
-            const duCtx = dataUrlCanvas.getContext('2d');
+            const duCtx = dataUrlCanvas.getContext('2d') as CanvasRenderingContext2D | null;
 
             if (duCtx) {
                 const sxOnTrimmed = Math.max(0, finalClippedX - contentActualX);
@@ -775,10 +778,11 @@ function processLayerListToExtractedElements(
         const isSimpleGroup = layer.meta?.isSimpleGroup;
         const isRewardBar = layer.meta?.isRewardBar;
         const isBaseItemBox = layer.meta?.isBaseItemBox;
+        const isPanelBottomBar = layer.meta?.isPanelBottomBar;
 
-        if (isRewardBar || isBaseItemBox) {
-            const componentType = isRewardBar ? 'rewardBar' : 'baseItemBox';
-            const componentNameForLog = isRewardBar ? 'RewardBar' : 'BaseItemBox';
+        if (isRewardBar || isBaseItemBox || isPanelBottomBar) {
+            const componentType = isRewardBar ? 'rewardBar' : (isBaseItemBox ? 'baseItemBox' : 'panelBottomBar');
+            const componentNameForLog = isRewardBar ? 'RewardBar' : (isBaseItemBox ? 'BaseItemBox' : 'PanelBottomBar');
             const exmlIdForComponent = layerOriginalName; // EXML id remains original name
 
             let canvasForProcessing = layer.canvas;
@@ -819,7 +823,7 @@ function processLayerListToExtractedElements(
             let dataUrlForPreview: string | undefined;
             let imageResourceNameForPreview: string | undefined;
 
-            if (isBaseItemBox && trimmedCanvas.width > 0 && trimmedCanvas.height > 0) {
+            if ((isBaseItemBox || isPanelBottomBar) && trimmedCanvas.width > 0 && trimmedCanvas.height > 0) {
                 let canvasForDataUrl = trimmedCanvas;
                 if (layerMasterOpacity < 0.99) {
                     canvasForDataUrl = applyOpacityToCanvas(trimmedCanvas, layerMasterOpacity);
@@ -846,7 +850,7 @@ function processLayerListToExtractedElements(
                 }
             }
 
-            const customComponentElement: ExtractedRewardBarElement | ExtractedBaseItemBoxElement = {
+            const customComponentElement: ExtractedRewardBarElement | ExtractedBaseItemBoxElement | ExtractedPanelBottomBarElement = {
                 id: currentElementId,
                 type: componentType,
                 originalName: layerOriginalName,
@@ -857,6 +861,7 @@ function processLayerListToExtractedElements(
                 height: contentActualHeight, // Use actual content height
                 opacity: layerMasterOpacity,
                 ...(isBaseItemBox && { dataUrl: dataUrlForPreview, imageResourceName: imageResourceNameForPreview }),
+                ...(isPanelBottomBar && { dataUrl: dataUrlForPreview }),
             };
             extractedElements.push(customComponentElement);
             continue;
@@ -1077,7 +1082,7 @@ function processLayerListToExtractedElements(
             const dataUrlCanvas = document.createElement('canvas');
             dataUrlCanvas.width = finalVisibleWidth;
             dataUrlCanvas.height = finalVisibleHeight;
-            const duCtx = dataUrlCanvas.getContext('2d');
+            const duCtx = dataUrlCanvas.getContext('2d') as CanvasRenderingContext2D | null;
 
             if (duCtx) {
                 const sxOnTrimmed = Math.max(0, finalClippedX - contentActualX);
@@ -1158,36 +1163,32 @@ function processLayerListToExtractedElements(
             if (primaryFontSize < 1) primaryFontSize = 1;
             const primaryFontFamily = textData.style?.font?.name || 'Arial';
 
-            if (textData.text.includes('\n')) {
-
-                let measuredWidth = 0;
-                if (textData.text) {
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    if (context) {
-                        context.font = `${primaryFontSize}px '${primaryFontFamily}', 'Arial'`;
-                        const lines = textData.text.split('\n');
-                        for (const line of lines) {
-                            const lineWidth = Math.ceil(context.measureText(line).width);
-                            if (lineWidth > measuredWidth) {
-                                measuredWidth = lineWidth;
-                            }
-                        }
-                    } else {
-                        console.warn(`Could not get 2D context to measure text width for layer "${layerOriginalName}". Falling back to PSD width.`);
-                        measuredWidth = layerActualWidth;
-                    }
-                }
-                finalWidth = measuredWidth;
+            // Determine if it is a multi-line text layer.
+            // A text layer is multi-line if it contains explicit newlines OR if the PSD layer's actual height
+            // is significantly larger than a single line's font size (e.g., height > fontSize * 1.5).
+            const isMultiLine = textData.text.includes('\n') || (layerActualHeight > primaryFontSize * 1.5);
+            if (isMultiLine) {
+                // For multi-line text, we must specify a fixed width to allow wrapping.
+                // We use the PSD layer's actual layout width as it represents the text bounding box.
+                finalWidth = layerActualWidth;
             } else {
+                // Single-line text width is auto-sized in Egret, so we set it to 0.
                 finalWidth = 0;
             }
+
+            console.log(`[Text Width Debug] Layer: "${layerOriginalName}"
+              - Text: ${JSON.stringify(textData.text.substring(0, 30))}...
+              - Height: ${layerActualHeight} vs FontSize: ${primaryFontSize}
+              - isMultiLine: ${isMultiLine}
+              - layerActualWidth: ${layerActualWidth}
+              - finalWidth calculated: ${finalWidth}`);
             // Do not zero finalHeight here — for multi-line text we'll compute a measured
             // height after line spacing calculations so the element doesn't get skipped.
 
 
             if (textData.transform) {
-                const [xx, _xy, yx, _yy, _tx, _ty] = textData.transform;
+                const xx = textData.transform[0];
+                const yx = textData.transform[2];
                 const angleRad = Math.atan2(yx, xx);
                 let angleDeg = angleRad * (180 / Math.PI);
                 if (Math.abs(angleDeg) > 0.01) {
@@ -1394,7 +1395,7 @@ function processLayerListToExtractedElements(
             const dataUrlCanvas = document.createElement('canvas');
             dataUrlCanvas.width = finalVisibleWidth;
             dataUrlCanvas.height = finalVisibleHeight;
-            const duCtx = dataUrlCanvas.getContext('2d');
+            const duCtx = dataUrlCanvas.getContext('2d') as CanvasRenderingContext2D | null;
 
             if (duCtx) {
                 const sxOnTrimmed = Math.max(0, finalClippedX - contentActualX);

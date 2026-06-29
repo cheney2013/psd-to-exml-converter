@@ -1,6 +1,6 @@
 import React from 'react';
-import { ExtractedLayer, ExtractedImageElement, ExtractedTextElement, ExtractedRectElement, ExtractedXGroupButtonElement, ExtractedGroupElement, ExtractedRewardBarElement, ExtractedSimpleButtonElement, ExtractedBaseItemBoxElement } from '../types';
-import { DownloadIcon, ImageIcon as GenericImageIcon, TextIcon, InfoIcon, SquareIcon, GroupButtonIcon, FolderIcon, StarIcon, LightBulbIcon, SimpleButtonIcon, BaseItemBoxIcon } from './icons';
+import { ExtractedLayer, ExtractedImageElement, ExtractedTextElement, ExtractedRectElement, ExtractedXGroupButtonElement, ExtractedGroupElement, ExtractedRewardBarElement, ExtractedSimpleButtonElement, ExtractedBaseItemBoxElement, ExtractedPanelBottomBarElement } from '../types';
+import { DownloadIcon, ImageIcon as GenericImageIcon, TextIcon, InfoIcon, SquareIcon, GroupButtonIcon, FolderIcon, StarIcon, LightBulbIcon, SimpleButtonIcon, BaseItemBoxIcon, PanelBottomBarIcon } from './icons';
 
 interface ElementPreviewCardProps {
   element: ExtractedLayer;
@@ -18,6 +18,7 @@ const ElementPreviewCard: React.FC<ElementPreviewCardProps> = ({ element, onDown
   const isRewardBarElement = (el: ExtractedLayer): el is ExtractedRewardBarElement => el.type === 'rewardBar';
   const isSimpleButtonElement = (el: ExtractedLayer): el is ExtractedSimpleButtonElement => el.type === 'simpleButton';
   const isBaseItemBoxElement = (el: ExtractedLayer): el is ExtractedBaseItemBoxElement => el.type === 'baseItemBox';
+  const isPanelBottomBarElement = (el: ExtractedLayer): el is ExtractedPanelBottomBarElement => el.type === 'panelBottomBar';
 
 
   const formatRgbaFromHexAlpha = (hexColor: string, alpha: number): string => {
@@ -109,6 +110,13 @@ const ElementPreviewCard: React.FC<ElementPreviewCardProps> = ({ element, onDown
           <p className="text-xs">(Custom Component)</p>
         </div>
       )}
+      {isPanelBottomBarElement(element) && (
+        <div className="w-full h-40 bg-slate-600 flex flex-col items-center justify-center overflow-hidden p-2 text-slate-300">
+          <PanelBottomBarIcon className="w-12 h-12 text-slate-400 mb-2" />
+          <p className="font-semibold text-sm">PanelBottomBar</p>
+          <p className="text-xs">(Custom Component)</p>
+        </div>
+      )}
 
 
       <div className="p-4">
@@ -121,6 +129,7 @@ const ElementPreviewCard: React.FC<ElementPreviewCardProps> = ({ element, onDown
           {isRewardBarElement(element) && <StarIcon className="w-4 h-4 mr-2 text-amber-400"/>}
           {isSimpleButtonElement(element) && <SimpleButtonIcon className="w-4 h-4 mr-2 text-orange-400"/>}
           {isBaseItemBoxElement(element) && <BaseItemBoxIcon className="w-4 h-4 mr-2 text-lime-400"/>}
+          {isPanelBottomBarElement(element) && <PanelBottomBarIcon className="w-4 h-4 mr-2 text-slate-400"/>}
 
           <h3 className="font-semibold text-sm text-slate-200 truncate" title={element.originalName}>
             {element.originalName}
@@ -222,6 +231,11 @@ const ElementPreviewCard: React.FC<ElementPreviewCardProps> = ({ element, onDown
            {isBaseItemBoxElement(element) && (
              <div className="flex-1 text-center text-xs text-slate-500 italic py-1.5">
                Custom (ns1:BaseItemBox)
+             </div>
+           )}
+           {isPanelBottomBarElement(element) && (
+             <div className="flex-1 text-center text-xs text-slate-500 italic py-1.5">
+               Custom (ns1:PanelBottomBar)
              </div>
            )}
         </div>

@@ -1,6 +1,6 @@
 
 
-import { ParsedPsdData, ExtractedLayer, ExtractedTextElement, ExtractedImageElement, ExtractedXGroupButtonElement, ExtractedSimpleButtonElement, ExtractedRewardBarElement, ExtractedBaseItemBoxElement, ExtractedGroupElement } from '../types';
+import { ParsedPsdData, ExtractedLayer, ExtractedTextElement, ExtractedImageElement, ExtractedXGroupButtonElement, ExtractedSimpleButtonElement, ExtractedRewardBarElement, ExtractedBaseItemBoxElement, ExtractedGroupElement, ExtractedPanelBottomBarElement } from '../types';
 
 export type ParentClassType = 'BasePage' | 'XNormalPanel' | 'XFullScreenPanel';
 
@@ -87,6 +87,11 @@ export const generateTypeScript = (
         originalIdForHandler = componentEl.name; // name is the EXML id
         id = sanitizeForTsVariable(componentEl.name);
         tsType = 'BaseItemBox';
+      } else if (el.type === 'panelBottomBar') {
+        const componentEl = el as ExtractedPanelBottomBarElement;
+        originalIdForHandler = componentEl.name; // name is the EXML id
+        id = sanitizeForTsVariable(componentEl.name);
+        tsType = 'PanelBottomBar';
       } else if (el.type === 'group') {
         const groupEl = el as ExtractedGroupElement;
         // Only create TS variable if original PSD layer name starts with "grp"

@@ -137,3 +137,10 @@ export const CogIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5
     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0015 0m-15 0a7.5 7.5 0 1115 0m-15 0H3m18 0h-1.5m-15.364 5.026A7.502 7.502 0 0112 19.5c2.414 0 4.586-1.157 6.026-2.974m1.135-4.474a7.501 7.501 0 00-14.302-3.053M3.75 5.25A7.5 7.5 0 0012 3c1.385 0 2.68.363 3.75.974m-14.25 0c-.09.156-.172.32-.246.491M12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z" />
   </svg>
 );
+
+export const PanelBottomBarIcon: React.FC<{ className?: string, style?: React.CSSProperties }> = ({ className = "w-6 h-6", style }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} style={style}>
+    <rect x="3" y="14" width="18" height="6" rx="1" stroke="currentColor" fill="none" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8h18" />
+  </svg>
+);
